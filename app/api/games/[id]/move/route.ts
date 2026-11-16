@@ -25,7 +25,7 @@ function parse(a: Record<string, unknown>): Action | null {
 }
 
 export const POST = withUser(async (user, req: Request, ctx: Ctx) => {
-	if (rateLimited(`move:${user.id}`, 20, 5000)) return fail('Too many moves at once — slow down a little', 429);
+	if (rateLimited(`move:${user.id}`, 20, 5000)) return fail('Whoa, that’s a lot of moves at once. Slow down a little.', 429);
 	const { id } = await ctx.params;
 	const gameId = Number(id);
 	if (!Number.isInteger(gameId) || gameId <= 0) return fail('Game not found', 404);

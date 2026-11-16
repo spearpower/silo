@@ -68,7 +68,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 			<main><div className="empty"><strong>This table was closed</strong>The host cancelled this game.<Link className="btn btn-primary" href="/join">Find Another Table</Link></div></main></div>
 	);
 
-	const inviteText = () => `Join my PicknPlay table — game ${id}${data.pin ? `, PIN ${data.pin}` : ''}`;
+	const inviteText = () => `Come play PicknPlay with me! Game ${id}${data.pin ? `, PIN ${data.pin}` : ''}`;
 	const whatsapp = () => {
 		const url = `${location.origin}/lobby/${id}`;
 		window.open(`https://wa.me/?text=${encodeURIComponent(`${inviteText()}: ${url}`)}`, '_blank', 'noopener');
@@ -162,7 +162,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 								<label key={t}><input type="radio" name="timer" checked={timer === t} onChange={() => setTimer(t)} /><span>{t ? `${t}s` : 'Off'}</span></label>
 							))}
 						</div>
-						<p className="hint">When time runs out, the turn is played automatically.</p>
+						<p className="hint">If a player runs out of time, they draw a card and play moves on.</p>
 					</>
 				)}
 

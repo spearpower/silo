@@ -19,7 +19,7 @@ export default function AdminPage() {
 		if (!s) return;
 		const before = s;
 		setS({ ...s, rules: { ...s.rules, ...patch } }); setError(''); setSaved('');
-		try { setS(await api<Settings>('/api/admin/settings', { rules: patch })); setSaved(`${msg} — applies to games started from now on`); }
+		try { setS(await api<Settings>('/api/admin/settings', { rules: patch })); setSaved(`${msg}. New games will use this from now on.`); }
 		catch (e) { setError((e as Error).message); setS(before); }
 	}
 
@@ -64,7 +64,7 @@ export default function AdminPage() {
 							<label htmlFor="vf">Virtual Friends</label>
 							<span className="switch"><input id="vf" type="checkbox" role="switch" checked={s.virtualFriends} onChange={e => toggle('virtualFriends', e.target.checked)} /><span /></span>
 						</div>
-						<p className="hint">Practice games against computer players, Quick Game filling, and adding them to empty seats. Games already in progress keep playing.</p>
+						<p className="hint">Lets people practise against computer players, fills Quick Game tables, and lets hosts add them to empty seats. Games already being played aren’t affected.</p>
 						<div className="switch-row">
 							<label htmlFor="voice">Voice chat at tables</label>
 							<span className="switch"><input id="voice" type="checkbox" role="switch" checked={s.voiceChat} disabled={!s.voiceReady && !s.voiceChat} onChange={e => toggle('voiceChat', e.target.checked)} /><span /></span>

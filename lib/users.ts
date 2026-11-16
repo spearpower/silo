@@ -28,7 +28,7 @@ export async function signUp(input: Partial<SignUpInput>): Promise<Session> {
 	const phone = (input.phone || '').replace(/\D/g, '') || null;
 	const password = input.password || '';
 	if (!fullname) throw new GameError('Enter your full name');
-	if (!/^[A-Za-z0-9]{2,20}$/.test(username)) throw new GameError('Username: 2–20 letters or numbers, no spaces');
+	if (!/^[A-Za-z0-9]{2,20}$/.test(username)) throw new GameError('Usernames are 2 to 20 letters or numbers, with no spaces');
 	if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new GameError('That email doesn’t look right');
 	if (phone && (phone.length < 9 || phone.length > 13)) throw new GameError('That phone number doesn’t look right');
 	if (password.length < 6) throw new GameError('Use a password of at least 6 characters');
@@ -64,7 +64,7 @@ export async function updateAccount(id: number, input: Partial<AccountUpdate>): 
 	const email = (input.email ?? cur.email ?? '').trim() || null;
 	const phone = (input.phone ?? cur.phone ?? '').replace(/\D/g, '') || null;
 	const photo = input.photo ?? cur.photo;
-	if (!/^[A-Za-z0-9]{2,20}$/.test(username)) throw new GameError('Username: 2–20 letters or numbers, no spaces');
+	if (!/^[A-Za-z0-9]{2,20}$/.test(username)) throw new GameError('Usernames are 2 to 20 letters or numbers, with no spaces');
 	if (!fullname) throw new GameError('Enter your full name');
 	if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new GameError('That email doesn’t look right');
 	if (phone && (phone.length < 9 || phone.length > 13)) throw new GameError('That phone number doesn’t look right');

@@ -50,7 +50,7 @@ export default function PlayersPage() {
 								<img className="av" src={avatar(p.photo)} alt="" />
 								<span className="main">
 									<span className="title">{p.username}{p.id === me ? ' (you)' : ''}</span>
-									<span className="sub">{p.fullname || '—'} · {ago(p.lastSeen)} · {p.games} {p.games === 1 ? 'game' : 'games'}</span>
+									<span className="sub">{p.fullname || 'No name'} · {ago(p.lastSeen)} · {p.games} {p.games === 1 ? 'game' : 'games'}</span>
 								</span>
 								<span className="meta">
 									{p.status !== 'active' && <span className="badge pill orange">Suspended</span>}
@@ -98,8 +98,8 @@ function PlayerSheet({ p, myRole, isMe, onClose, onChanged }: { p: Player; myRol
 					<div><div className="name">{p.username}</div><div className="sub">{ROLE_LABEL[role]} · {status === 'active' ? 'Active' : 'Suspended'}</div></div>
 				</div>
 				<div className="list kv">
-					<div className="list-row"><span className="main"><span className="sub">Name</span><span className="title">{p.fullname || '—'}</span></span></div>
-					<div className="list-row"><span className="main"><span className="sub">Email · Phone</span><span className="title">{p.email || '—'} · {p.phone || '—'}</span></span></div>
+					<div className="list-row"><span className="main"><span className="sub">Name</span><span className="title">{p.fullname || 'Not given'}</span></span></div>
+					<div className="list-row"><span className="main"><span className="sub">Email · Phone</span><span className="title">{p.email || 'No email'} · {p.phone || 'No phone'}</span></span></div>
 					<div className="list-row"><span className="main"><span className="sub">Last seen · Joined</span><span className="title">{ago(p.lastSeen)} · {new Date(p.joined).toLocaleDateString()}</span></span></div>
 					<div className="list-row"><span className="main"><span className="sub">Games</span><span className="title">{p.games}</span></span></div>
 				</div>

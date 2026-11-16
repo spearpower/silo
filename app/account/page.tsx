@@ -115,7 +115,7 @@ export default function AccountPage() {
 						onPointerUp={() => playSound('play', true)} onKeyUp={() => playSound('play', true)} aria-valuetext={`${volume}%`} />
 					<span className="vol-val">{volume}%</span>
 				</div>
-				<p className="hint">Your turn, cards played and drawn, penalties, cuts and wins. On this device only. The 🔔 on the table mutes them too.</p>
+				<p className="hint">You’ll hear your turn, cards being played and drawn, penalties, cuts and wins. This only changes this device. You can also mute from the 🔔 at the table.</p>
 
 				<form onSubmit={changePw} noValidate>
 					<div className="section-title">Change password</div>

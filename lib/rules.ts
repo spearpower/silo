@@ -6,8 +6,8 @@ import { BLACK_SPADE_ACE, Card, isJoker, rankOf, Suit, suitOf, Variant } from '.
 export interface VariantInfo { id: Variant; name: string; short: string; blurb: string; deck: number }
 
 export const VARIANTS: VariantInfo[] = [
-	{ id: 'classic', name: 'PicknPlay Classic', short: 'Classic', deck: 52, blurb: '52 cards, no Jokers. 2s make the next player draw 2; any Ace cancels.' },
-	{ id: 'super', name: 'PicknPlay Super', short: 'Super', deck: 54, blurb: '54 cards with 2 Jokers. 2 = draw 2, 3 = draw 3, Joker = draw 5. Only the Black Spade Ace stops a 3 or Joker.' },
+	{ id: 'classic', name: 'PicknPlay Classic', short: 'Classic', deck: 52, blurb: 'The classic game with 52 cards and no Jokers. Hit the next player with a 2, and stop a 2 with any Ace.' },
+	{ id: 'super', name: 'PicknPlay Super', short: 'Super', deck: 54, blurb: 'Adds two Jokers. A 2 makes the next player draw 2, a 3 draws 3 and a Joker draws 5. Only the Ace of Spades stops a 3 or a Joker.' },
 ];
 export const variantInfo = (v: unknown): VariantInfo => VARIANTS.find(x => x.id === v) || VARIANTS[0];
 export const asVariant = (x: unknown): Variant => (x === 'super' ? 'super' : 'classic');

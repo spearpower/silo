@@ -6,7 +6,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
 	title: { default: 'PicknPlay', template: '%s · PicknPlay' },
-	description: 'PicknPlay — the match-and-shed card game. Classic and Super, with 2–6 friends in real time.',
+	description: 'Match the suit, dodge the penalties and empty your hand first. Play PicknPlay Classic or Super live with 2 to 6 friends.',
 	manifest: '/manifest.webmanifest',
 	icons: {
 		icon: [{ url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' }, { url: '/icons/icon.svg', type: 'image/svg+xml' }],

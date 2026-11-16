@@ -22,7 +22,7 @@ export default async function PlayPage() {
 			<NavBar trailing={<SignOutButton />} />
 			<main>
 				<h1 className="large-title">Play</h1>
-				<p className="subtitle">Match the suit or rank, hit them with 2s, and cut when your hand is low. 2–6 players, Classic or Super.</p>
+				<p className="subtitle">Match the suit or rank, hit them with 2s, and cut when your hand is low. 2 to 6 players, Classic or Super.</p>
 
 				<PlayExtras />
 
@@ -61,7 +61,7 @@ export default async function PlayPage() {
 						<nav className="group" aria-label="Practice">
 							<Link className="row-link" href="/practice">
 								<span className="row-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16h5" /></svg></span>
-								<span className="row-text"><span className="row-title">Play with Virtual Friends</span><span className="row-sub">Start now against 1–5 computer players</span></span>
+								<span className="row-text"><span className="row-title">Play with Virtual Friends</span><span className="row-sub">Start now against 1 to 5 computer players</span></span>
 								<Chevron />
 							</Link>
 						</nav>

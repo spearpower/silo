@@ -14,7 +14,7 @@ export default function HowToPlay({ variant }: { variant?: Variant }) {
 	const cutBelow = sup ? rules.superCutBelow : rules.classicCutBelow;
 	return (
 		<div className="howto">
-			<p><b>PicknPlay</b> is a shedding card game: match the top card of the discard pile by <b>suit or rank</b>, use special cards to change the play, and be the first to <b>empty your hand</b> — or end the game with a <b>cut</b> while your hand is low.</p>
+			<p><b>PicknPlay</b> is a shedding card game: match the top card of the discard pile by <b>suit or rank</b>, use special cards to change the play, and be the first to <b>empty your hand</b>, or end the game with a <b>cut</b> while your hand is low.</p>
 
 			<div className="segmented" role="radiogroup" aria-label="Variant" style={{ margin: '12px 0' }}>
 				{VARIANTS.map(v => <label key={v.id}><input type="radio" name="howto-variant" checked={shown === v.id} onChange={() => setShown(v.id)} /><span>{v.short}{variant === v.id ? ' · this game' : ''}</span></label>)}
@@ -37,33 +37,33 @@ export default function HowToPlay({ variant }: { variant?: Variant }) {
 
 			<h3>Special cards</h3>
 			<table className="pts"><tbody>
-				<tr><td><b>2</b></td><td>The next player draws 2 — unless they play another 2 to pass it on (+2 each time). <b>Any Ace</b> cancels it.</td></tr>
+				<tr><td><b>2</b></td><td>The next player draws 2, unless they play another 2 and pass it on (it grows by 2 each time). <b>Any Ace</b> cancels it.</td></tr>
 				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>Black Spade Ace (A♠)</b> cancels it.</td></tr>}
 				{sup && <tr><td><b>Joker</b></td><td>The next player draws 5, or passes it on with the other Joker (+5). Only the <b>A♠</b> cancels it. {rules.jokerOnAnything ? 'A Joker can go on any card and keeps the suit being followed.' : 'A Joker can only go on a Joker.'}</td></tr>}
 				<tr><td><b>8</b></td><td>With 2 players: play again. With more: the next player is <b>skipped</b>.</td></tr>
 				<tr><td><b>Jack</b></td><td>With 2 players: play again. With more: the <b>direction of play reverses</b>.</td></tr>
 				<tr><td><b>Ace</b></td><td>Goes on any card except a 2. You <b>name the suit</b> the next player must follow. It also cancels a 2 penalty.</td></tr>
 			</tbody></table>
-			<p className="small">Facing a penalty you can only pass it on, cancel it with an allowed Ace, or <b>draw the whole amount</b>{rules.penaltyResponse === 'draw' ? ' — which ends your turn' : ' and then play on'}.</p>
+			<p className="small">Facing a penalty you can only pass it on, cancel it with an allowed Ace, or <b>draw the whole amount</b>{rules.penaltyResponse === 'draw' ? ', and that ends your turn' : ' and then play on'}.</p>
 
 			<h3>Cutting</h3>
-			<p>Play the <b>7 of the cutter’s suit</b> and tap <b>Cut</b> to end the game at once. Everyone counts the cards left in their hand — the <b>lowest total wins</b> (the cutter can lose!).
+			<p>Play the <b>7 of the cutter’s suit</b> and tap <b>Cut</b> to end the game at once. Everyone adds up the cards left in their hand and the <b>lowest total wins</b>. Careful: the cutter can lose!
 				{cutBelow !== null && <> In {sup ? 'Super' : 'Classic'} you may only cut when your own hand, after the 7, totals <b>below {cutBelow}</b>.</>}
 				{rules.cutTie === 'share' ? ' A tie for lowest shares the win.' : ' If the cutter ties for lowest, the cutter wins.'}</p>
 			<table className="pts"><tbody>
 				<tr><td>2</td><td>20 points</td></tr>
 				<tr><td>Ace</td><td>15 points{sup && <> · <b>A♠ 60 points</b></>}</td></tr>
 				<tr><td>King · Queen · Jack</td><td>13 · 12 · 11 points</td></tr>
-				<tr><td>3 – 10</td><td>Face value</td></tr>
+				<tr><td>3 to 10</td><td>Face value</td></tr>
 				{sup && <tr><td>Joker</td><td>{rules.jokerPoints} points (house rule)</td></tr>}
 			</tbody></table>
 
 			<h3>Winning</h3>
-			<p><b>Go out</b> (play your last card) and you win outright — or win a <b>cut</b> with the lowest hand. Everyone earns leaderboard points for their place: with 4 players, 1st gets 4, 2nd gets 3, and so on. Games with Virtual Friends are practice and don’t count.</p>
+			<p><b>Go out</b> (play your last card) and you win outright. You can also win a <b>cut</b> by holding the lowest hand. Everyone earns leaderboard points for their place: with 4 players, 1st gets 4, 2nd gets 3, and so on. Games with Virtual Friends are practice and don’t count.</p>
 
 			<h3>Fair play</h3>
 			<ul>
-				<li>Every move is checked by the server — nobody can see your hand or play out of turn.</li>
+				<li>The server checks every move, so nobody can peek at your hand or play out of turn.</li>
 				<li>With a turn timer, a turn that runs out draws a card for you and passes.</li>
 				<li>Miss <b>3 turns in a row</b> and you’re taken out so the table can carry on.</li>
 				<li>The host can remove players or end the game, always with a reason.</li>

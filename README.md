@@ -1,8 +1,8 @@
 # PicknPlay
 
-**PicknPlay** is a real-time multiplayer shedding card game for 2–6 players. Match the top card of the
+**PicknPlay** is a real-time multiplayer shedding card game for 2 to 6 players. Match the top card of the
 discard pile by **suit or rank**, attack with draw penalties, change the play with 8s, Jacks and Aces,
-and win by **emptying your hand** — or end the game with a **cut** while your hand is low.
+and win by **emptying your hand**, or end the game with a **cut** while your hand is low.
 
 It runs in any browser and installs to the home screen as a PWA. Games can be played with friends
 (private tables with a PIN, invite links, Quick Game) or against **Virtual Friends** (computer players).
@@ -24,7 +24,7 @@ The game rules are specified in **[rules/rules.MD](rules/rules.MD)**, the author
 | Cutting | the 7 of the cutter card's suit; lowest hand wins | same, and the cutter's hand must be below 60 |
 | A♠ value | 15 | 60 |
 
-Card points at a cut: 2 = 20, Ace = 15 (A♠ = 60 in Super), J = 11, Q = 12, K = 13, 3–10 face value.
+Card points at a cut: 2 = 20, Ace = 15 (A♠ = 60 in Super), J = 11, Q = 12, K = 13, 3 to 10 face value.
 
 ### Rule decisions (rules.MD §5 "Items to agree before play")
 
@@ -55,12 +55,12 @@ Other implementation choices (documented, not configurable):
 
 ## Technology stack
 
-- **Next.js 15** (App Router) + **React 19** + TypeScript — pages, API routes and the game engine in one app
-- **PostgreSQL** via `postgres` (postgres.js) — the existing `picknplay` database
-- **jose** — signed session cookie; passwords are bcrypt-hashed in Postgres (`pgcrypto`)
+- **Next.js 15** (App Router) + **React 19** + TypeScript: pages, API routes and the game engine in one app
+- **PostgreSQL** via `postgres` (postgres.js), using the existing `picknplay` database
+- **jose** for the signed session cookie; passwords are bcrypt-hashed in Postgres (`pgcrypto`)
 - Optional: **Supabase Realtime** (instant updates; otherwise polling), **LiveKit** (voice chat),
   **Web Push** (turn alerts)
-- **Vitest** — engine tests
+- **Vitest** for the engine tests
 
 ## Architecture
 
@@ -162,7 +162,7 @@ npm run typecheck
 
 - **Sounds** (Web Audio): deal, play, draw, penalty (heavier when it hits you), cancel, suit call, skip, reverse, reshuffle, cut,
   last-card warning, win / lose, a tick in your last 5 seconds, and a soft “bonk” for a card that doesn't fit. On/off + volume per device.
-- **Alerts**: Web Push (turn — including a waiting draw penalty — game start, game over, invites, friend requests), an in-app
+- **Alerts**: Web Push (your turn, including a waiting draw penalty, game start, game over, invites, friend requests), an in-app
   “It’s your turn” banner on every other page, the app-icon badge, and the tab title while the table is in the background.
 - **Voice chat**: LiveKit; one connection from the waiting room to the table, who’s-in list, mute, speaking rings on seats.
 

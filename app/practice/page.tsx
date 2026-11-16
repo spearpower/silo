@@ -58,7 +58,7 @@ export default function PracticePage() {
 						<label key={t}><input type="radio" name="timer" checked={timer === t} onChange={() => setTimer(t)} /><span>{t ? `${t}s` : 'Off'}</span></label>
 					))}
 				</div>
-				<p className="hint">Virtual Friends take about two seconds per turn.</p>
+				<p className="hint">Virtual Friends take a second or two to think on each turn.</p>
 
 				<div className="dock"><div>
 					<button className="btn btn-primary" type="button" disabled={busy} onClick={start}>{busy ? 'Dealing…' : 'Start Practice Game'}</button>

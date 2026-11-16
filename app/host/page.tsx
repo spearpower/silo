@@ -35,7 +35,7 @@ export default function HostPage() {
 					<div className="fields">
 						<div className="field">
 							<label htmlFor="pin">PIN (optional)</label>
-							<input id="pin" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="No PIN — anyone can join" inputMode="numeric" pattern="[0-9]*" maxLength={4} autoComplete="off" />
+							<input id="pin" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="No PIN, anyone can join" inputMode="numeric" pattern="[0-9]*" maxLength={4} autoComplete="off" />
 						</div>
 					</div>
 					<p className="hint">Add a 4-digit PIN to make the game private.</p>
@@ -46,7 +46,7 @@ export default function HostPage() {
 					<div className="segmented" role="radiogroup" aria-label="Turn timer">
 						{[15, 30, 60, 0].map(t => <label key={t}><input type="radio" name="timer" checked={timer === t} onChange={() => setTimer(t)} /><span>{t ? `${t} s` : 'None'}</span></label>)}
 					</div>
-					<p className="hint">When time runs out, a card is drawn for that player and play moves on. You can change it in the waiting room.</p>
+					<p className="hint">If someone runs out of time, they draw a card and play moves on. You can still change this in the waiting room.</p>
 					<div className="dock"><div>
 						<button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create Game'}</button>
 						<ErrorBanner>{error}</ErrorBanner>

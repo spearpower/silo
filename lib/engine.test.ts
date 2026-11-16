@@ -243,8 +243,8 @@ describe('drawing', () => {
 		apply(s, 1, { type: 'draw' });
 		expect(s.step).toBe('drawn');
 		expect(s.drawn).toBe('4H');
-		expect(() => apply(s, 1, { type: 'play', card: 'KC' })).toThrow(/only play the card you drew/);
-		expect(() => apply(s, 1, { type: 'draw' })).toThrow(/already drawn/);
+		expect(() => apply(s, 1, { type: 'play', card: 'KC' })).toThrow(/only play the card you just drew/);
+		expect(() => apply(s, 1, { type: 'draw' })).toThrow(/already drawn/i);
 		apply(s, 1, { type: 'play', card: '4H' });
 		expect(s.turn).toBe(2);
 

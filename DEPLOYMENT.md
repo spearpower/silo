@@ -1,4 +1,4 @@
-# PicknPlay — setup and deployment guide
+# PicknPlay setup and deployment guide
 
 PicknPlay is a Next.js 15 app: pages, API routes and the game engine run together (on your machine, a
 Node server, or **Vercel**). All data lives in **PostgreSQL**. Live updates use **Supabase Realtime**
@@ -57,7 +57,7 @@ values ('gero', app_hash_password('<strong password>'), 'Gerald', 'superadmin');
 | `CRON_SECRET` | random string | daily clean-up job |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud project | voice chat (admin switch) |
 
-Use **new** keys for PicknPlay — don't reuse another app's Supabase / LiveKit / VAPID keys.
+Use **new** keys for PicknPlay. Don't reuse another app's Supabase / LiveKit / VAPID keys.
 
 3. Deploy. `vercel.json` pins functions to `lhr1` (London); change `regions` to the Vercel region nearest
    your database. It also schedules `/api/cron/daily` at 03:00 UTC.
@@ -94,7 +94,7 @@ Database changes live in `db/migrations/`, numbered, additive and safe to re-run
 2. The server opens a transaction, locks the game row (`SELECT … FOR UPDATE`) and applies `lib/engine.ts`,
    which checks turn, ownership and legality against the variant and the game's rule snapshot.
 3. It saves `games.state`, mirrors the readable columns and hands, appends `game_events` (turn history),
-   sets the turn deadline and — at the end — final places and leaderboard points.
+   sets the turn deadline and, when the game ends, final places and leaderboard points.
 4. It pings `game-<id>`; every client re-fetches `GET /api/games/:id`, which returns only that player's view.
 
 **Turn timer:** the deadline is stored in `games.turn_deadline`. A device reports `timeout` at zero; the
@@ -106,7 +106,7 @@ No always-on server process is needed.
 **Sounds** need no setup. They are original WAV files in `public/sounds/` (re-make them with
 `python tools/gen_pnp_sounds.py`). Each player can switch them off or set the volume (Account → Sound, or 🔔 on the table).
 
-**Phone alerts (Web Push)** — "your turn" (also "Draw 4 is waiting for you"), "game started", "game over — who won",
+**Phone alerts (Web Push)** cover "your turn" (also "Draw 4 is waiting for you"), "game started", "game over" with who won,
 friend requests and table invites. They are only sent to players who aren't looking at the table.
 1. Use PicknPlay's own VAPID keys (already generated in your local `.env.local`): copy
    `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (set it to `mailto:<your email>`) to Vercel. Redeploy.
@@ -121,4 +121,4 @@ friend requests and table invites. They are only sent to players who aren't look
 3. Sign in as an admin → Admin → switch **Voice chat at tables** on (it stays greyed out until the 3 settings exist).
 4. At a table (or in the waiting room) tap 🎙, allow the microphone. The connection stays up from the waiting room to the
    table; tap "Voice · N" to see who's in, 🎙/🔇 to mute, ✕ to leave. Seats show 🎧 (in voice), 🔇 (muted) and a blue ring while talking.
-Only seated players get a voice pass (3 hours, one table's room, microphone only — no camera, no data).
+Only seated players get a voice pass (3 hours, one table's room, microphone only, so no camera and no data).

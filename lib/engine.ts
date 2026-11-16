@@ -192,7 +192,7 @@ export function apply(s: GameState, me: number, a: Action): GameState {
 function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, cut: boolean): GameState {
 	const me = p.id;
 	if (typeof card !== 'string' || !p.hand.includes(card)) throw new GameError('That card is not in your hand');
-	if (s.step === 'drawn' && card !== s.drawn) throw new GameError('After drawing you may only play the card you drew — or pass');
+	if (s.step === 'drawn' && card !== s.drawn) throw new GameError('You can only play the card you just drew, or keep it');
 	const t = tableOf(s);
 	if (!canPlay(t, card)) {
 		if (s.penalty) {
@@ -269,7 +269,7 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 
 function draw(s: GameState, p: PlayerState): GameState {
 	const me = p.id;
-	if (s.step !== 'play') throw new GameError('You have already drawn — play the card you drew or pass');
+	if (s.step !== 'play') throw new GameError('You’ve already drawn. Play that card or keep it.');
 
 	if (s.penalty) {
 		const amount = s.penalty.amount;

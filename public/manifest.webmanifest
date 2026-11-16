@@ -1,8 +1,8 @@
 {
 	"id": "/",
-	"name": "PicknPlay — card game with friends",
+	"name": "PicknPlay: the card game you play with friends",
 	"short_name": "PicknPlay",
-	"description": "PicknPlay — the match-and-shed card game. Classic and Super, with 2–6 friends in real time.",
+	"description": "Match the suit, dodge the penalties and empty your hand first. Play PicknPlay Classic or Super live with 2 to 6 friends.",
 	"start_url": "/?source=pwa",
 	"scope": "/",
 	"display": "standalone",

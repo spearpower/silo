@@ -237,9 +237,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		return (
 			<div className="app centered"><main className="center">
 				<div className="brand"><img src="/icons/icon-192.png" alt="" /><h1 className="large-title">{byMe ? 'You left this game' : away ? 'You were taken out' : 'You were removed'}</h1></div>
-				<p className="subtitle">{byMe ? `Reason: ${data.myLeft.reason || '—'}`
+				<p className="subtitle">{byMe ? `Reason: ${data.myLeft.reason || 'none given'}`
 					: away ? `Your turn ran out of time 3 times in a row, so game ${data.id} carried on without you.`
-					: `${data.myLeft.byName || 'The host'} removed you from game ${data.id}. Reason: ${data.myLeft.reason || '—'}`}</p>
+					: `${data.myLeft.byName || 'The host'} removed you from game ${data.id}. Reason: ${data.myLeft.reason || 'none given'}`}</p>
 				<Link className="btn btn-primary" href="/">Back to Play</Link>
 			</main></div>
 		);
@@ -270,7 +270,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	else if (data.status === 'ended') hint = 'Game ended';
 	else if (myTurn && pen) {
 		hintKind = 'skip';
-		hint = view.playable.length ? `Draw ${pen.amount} — or pass it on / cancel it` : `Draw ${pen.amount}: tap the draw pile`;
+		hint = view.playable.length ? `Draw ${pen.amount}, or pass it on or cancel it` : `Draw ${pen.amount}: tap the draw pile`;
 	} else if (myTurn && view.step === 'drawn') { hintKind = 'me'; hint = 'It fits! Play it, or keep it'; }
 	else if (myTurn) { hintKind = 'me'; hint = view.playable.length ? (selected ? 'Tap again (or the pile) to play' : 'Your turn · tap a lifted card') : 'No card fits · tap the draw pile'; }
 	else if (view.turn) hint = names[view.turn]?.isBot ? `${nameOf(view.turn)} is thinking…` : `${nameOf(view.turn)}’s turn`;
@@ -287,10 +287,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		if (!myTurn) { setSelected(s => (s === card ? null : card)); return say('Wait for your turn'); }
 		if (!view.playable.includes(card)) {
 			playSound('error');
-			if (view.step === 'drawn') return say('After drawing you may only play the card you drew — or keep it');
-			if (pen) return say(pen.kind === '2' ? `Only a 2 or an Ace can answer — or draw ${pen.amount}` : `Only a ${penaltyName(pen.kind)} or the A♠ can answer — or draw ${pen.amount}`);
+			if (view.step === 'drawn') return say('You can only play the card you just drew, or keep it');
+			if (pen) return say(pen.kind === '2' ? `Only a 2 or an Ace can answer this. Or draw ${pen.amount}.` : `Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
 			if (rankOf(card) === 'A') return say('An Ace can’t go on a 2');
-			return say(`That doesn’t match — follow ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? (isJoker(top) ? 'Joker' : rankOf(top)) : ''}`);
+			return say(`That one doesn’t fit. Play ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? (isJoker(top) ? 'Joker' : rankOf(top)) : ''}`);
 		}
 		haptic(6);
 		if (selected === card) playCard(card);
@@ -298,7 +298,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	};
 	const tapDeck = () => {
 		if (!myTurn) return say('Wait for your turn');
-		if (!canDraw) return say('You’ve drawn — play the card you drew, or keep it');
+		if (!canDraw) return say('You’ve already drawn. Play that card or keep it.');
 		fly('[data-drop="deck"]', '.hand', CARD_BACK);
 		send({ type: 'draw' });
 	};
@@ -488,7 +488,7 @@ function CutSheet({ card, after, below, others, onPick, onClose }: {
 		<div className="sheet-backdrop" onClick={onClose}>
 			<div className="sheet" role="dialog" aria-modal="true" aria-label="Cut or play" onClick={e => e.stopPropagation()}>
 				<div className="grabber" />
-				<h2>✂️ {suitSym(card)} — cut the game?</h2>
+				<h2>✂️ Cut with {suitSym(card)}?</h2>
 				<p className="subtitle center">Cutting ends the game now. Everyone counts their hand and the <b>lowest total wins</b>.
 					After this card your hand is worth <b>{after}</b> points{below !== null ? <> (you need under <b>{below}</b> to cut)</> : ''}.</p>
 				<p className="footnote center">{others.map(o => `${o.name}: ${o.cards} ${o.cards === 1 ? 'card' : 'cards'}`).join(' · ')}</p>
@@ -511,7 +511,7 @@ function FinishedSheet({ data, view, nameOf }: { data: GameData; view: GameView;
 	const winners = st.filter(s => s.rank === 1);
 	const isHost = data.me === data.hostId;
 	const myAward = st.find(s => s.id === data.me)?.award ?? 0;
-	const how = f.how === 'out' ? `${nameOf(f.by!)} went out — no cards left.`
+	const how = f.how === 'out' ? `${nameOf(f.by!)} played their last card.`
 		: f.how === 'cut' ? `${nameOf(f.by!)} cut with ${suitSym(view.cutSeven)}. Lowest hand wins.`
 		: f.how === 'count' ? 'The draw pile ran out. Lowest hand wins.'
 		: 'Nobody could move. Lowest hand wins.';
@@ -522,7 +522,7 @@ function FinishedSheet({ data, view, nameOf }: { data: GameData; view: GameView;
 				<div className="winner-crown"><Crown size={56} title="Winner" /></div>
 				<h2>{winners.some(w => w.id === data.me) ? (winners.length > 1 ? 'You share the win!' : 'You win!') : `${winners.map(w => nameOf(w.id)).join(' & ')} ${winners.length > 1 ? 'win' : 'wins'}!`}</h2>
 				<p className="subtitle center">{how}<br />{data.practice
-					? 'Practice game with Virtual Friends — no leaderboard points.'
+					? 'This was a practice game with Virtual Friends, so no leaderboard points.'
 					: <>You earned <b style={{ color: 'var(--gold)' }}>{myAward}</b> {myAward === 1 ? 'point' : 'points'} for the monthly leaderboard.</>}</p>
 				<div className="list">
 					{st.map(s => (
@@ -566,7 +566,7 @@ function EndedSheet({ data, nameOf }: { data: GameData; nameOf: (id: number) => 
 			<div className="sheet" role="dialog" aria-modal="true" aria-label="Game ended">
 				<div className="grabber" />
 				<h2>Game ended</h2>
-				<p className="subtitle center">{by ? `${by === data.me ? 'You' : data.ended?.byName || nameOf(by)} ended the game.` : 'The game ended.'} Reason: <b>{data.ended?.reason || '—'}</b><br />No leaderboard points were given.</p>
+				<p className="subtitle center">{by ? `${by === data.me ? 'You' : data.ended?.byName || nameOf(by)} ended the game.` : 'The game ended.'} Reason: <b>{data.ended?.reason || 'none given'}</b><br />No leaderboard points were given.</p>
 				<div style={{ marginTop: 16 }}>
 					{data.me === data.hostId && (
 						<button className="btn btn-primary" type="button" disabled={busy} onClick={async () => {

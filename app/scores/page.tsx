@@ -130,7 +130,7 @@ function StatsView({ userId }: { userId?: number }) {
 						<div className="stat"><div className="v">{s.games}</div><div className="k">Games</div></div>
 						<div className="stat"><div className="v">{s.wins}</div><div className="k">Wins</div></div>
 						<div className="stat"><div className="v">{s.winRate}%</div><div className="k">Win rate</div></div>
-						<div className="stat"><div className="v">{s.avgPlace ?? '—'}</div><div className="k">Average place</div></div>
+						<div className="stat"><div className="v">{s.avgPlace ?? 'None yet'}</div><div className="k">Average place</div></div>
 						<div className="stat"><div className="v">{s.bestStreak}</div><div className="k">Best win streak</div></div>
 						<div className="stat"><div className="v">{s.streak}</div><div className="k">Current streak</div></div>
 					</div>
@@ -144,12 +144,12 @@ function StatsView({ userId }: { userId?: number }) {
 								<div key={o.id} className="list-row">
 									<img className="av" src={avatar(o.photo)} alt="" />
 									<span className="main"><span className="title">vs {o.username}</span><span className="sub">{o.games} {o.games === 1 ? 'game' : 'games'} together</span></span>
-									<span className="meta h2h" aria-label={`${o.wins} ahead, ${o.losses} behind`}><b className="w">{o.wins}</b>–<b className="l">{o.losses}</b></span>
+									<span className="meta h2h" aria-label={`${o.wins} ahead, ${o.losses} behind`}><b className="w">{o.wins}</b> : <b className="l">{o.losses}</b></span>
 								</div>
 							))}
 						</div>
 					)}
-					<p className="hint">Ahead–behind: how often {userId ? 'they' : 'you'} finished above or below each player.</p>
+					<p className="hint">Ahead : behind shows how often {userId ? 'they' : 'you'} finished above or below each player.</p>
 				</>
 			)}
 		</>
@@ -168,12 +168,12 @@ function Recent() {
 		<div className="list">
 			{games.map(g => {
 				const winner = g.status === 'finished' ? g.players.find(p => p.rank === 1) : null;
-				const result = g.myLeft ? 'You left' : g.status === 'ended' ? 'Ended' : g.myRank === 1 ? 'You won' : g.myRank ? `${ordinal(g.myRank)} place` : '—';
+				const result = g.myLeft ? 'You left' : g.status === 'ended' ? 'Ended' : g.myRank === 1 ? 'You won' : g.myRank ? `${ordinal(g.myRank)} place` : 'No place';
 				const isOpen = open === g.id;
 				return (
 					<div key={g.id} className={`history${isOpen ? ' open' : ''}`}>
 						<button type="button" className="list-row" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : g.id)}>
-							<span className={`result-dot${g.myRank === 1 && !g.myLeft ? ' win' : g.status === 'ended' || g.myLeft ? ' off' : ''}`} aria-hidden="true">{g.myRank === 1 && !g.myLeft ? '👑' : g.myRank && !g.myLeft ? g.myRank : '–'}</span>
+							<span className={`result-dot${g.myRank === 1 && !g.myLeft ? ' win' : g.status === 'ended' || g.myLeft ? ' off' : ''}`} aria-hidden="true">{g.myRank === 1 && !g.myLeft ? '👑' : g.myRank && !g.myLeft ? g.myRank : '-'}</span>
 							<span className="main">
 								<span className="title">{result} · Game {g.id}</span>
 								<span className="sub">{when(g.at)} · {g.players.length} players{g.practice ? ' · practice' : ''}{winner ? ` · ${winner.username} won` : ''}</span>
@@ -186,7 +186,7 @@ function Recent() {
 								<table className="standings"><thead><tr><th>#</th><th>Player</th><th>Hand</th></tr></thead><tbody>
 									{g.players.map(p => (
 										<tr key={p.id}>
-											<td>{p.rank ?? '–'}</td>
+											<td>{p.rank ?? '-'}</td>
 											<td>{p.username}{p.isBot ? ' 🤖' : ''}{p.cut ? ' ✂️' : ''}{p.left ? <span className="left-note"> · left ({p.left})</span> : null}</td>
 											<td>{p.points} pts</td>
 										</tr>
