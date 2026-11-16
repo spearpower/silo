@@ -9,7 +9,7 @@ import { botTurn } from './bot';
 import { getRules, getSettings } from './settings';
 import { notifyGame, notifyLobbyList } from './realtime';
 import { after } from 'next/server';
-import { alertTurn } from './push';
+import { alertFinished, alertTurn } from './push';
 import { Session } from './session';
 import { isJoker, rankOf, SUIT_DB, suitOf, type Variant } from './card-codes';
 
@@ -442,7 +442,7 @@ export async function getGame(user: Session, gameId: number) {
 			changed = true;
 		});
 		if (changed) {
-			after(() => alertTurn(gameId));
+			after(async () => { await alertTurn(gameId); await alertFinished(gameId); }); // each checks the game's status itself
 			await ping(gameId);
 			[g] = await sql<(GameRow & { chat_last: number | null })[]>`
 				select g.*, (select max(m.id) from game_messages m where m.game_id = g.id) as chat_last from games g where g.id = ${gameId}`;

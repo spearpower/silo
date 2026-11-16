@@ -158,6 +158,14 @@ npm run typecheck
   The host can remove players or end a game, with a reason.
 - **Results**: winner(s), how the game ended, every hand revealed with its points, leaderboard points.
 
+## Sounds, alerts and voice
+
+- **Sounds** (Web Audio): deal, play, draw, penalty (heavier when it hits you), cancel, suit call, skip, reverse, reshuffle, cut,
+  last-card warning, win / lose, a tick in your last 5 seconds, and a soft “bonk” for a card that doesn't fit. On/off + volume per device.
+- **Alerts**: Web Push (turn — including a waiting draw penalty — game start, game over, invites, friend requests), an in-app
+  “It’s your turn” banner on every other page, the app-icon badge, and the tab title while the table is in the background.
+- **Voice chat**: LiveKit; one connection from the waiting room to the table, who’s-in list, mute, speaking rings on seats.
+
 ## Deployment
 
 See **[DEPLOYMENT.md](DEPLOYMENT.md)** (Vercel + hosted PostgreSQL/Supabase, environment variables, checks).

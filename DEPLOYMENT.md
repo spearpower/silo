@@ -100,3 +100,25 @@ Database changes live in `db/migrations/`, numbered, additive and safe to re-run
 **Turn timer:** the deadline is stored in `games.turn_deadline`. A device reports `timeout` at zero; the
 server checks the clock before drawing for that player. If nobody reports it, the next read applies it.
 No always-on server process is needed.
+
+## 8. Sounds, phone alerts and voice chat
+
+**Sounds** need no setup. They are original WAV files in `public/sounds/` (re-make them with
+`python tools/gen_pnp_sounds.py`). Each player can switch them off or set the volume (Account → Sound, or 🔔 on the table).
+
+**Phone alerts (Web Push)** — "your turn" (also "Draw 4 is waiting for you"), "game started", "game over — who won",
+friend requests and table invites. They are only sent to players who aren't looking at the table.
+1. Use PicknPlay's own VAPID keys (already generated in your local `.env.local`): copy
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (set it to `mailto:<your email>`) to Vercel. Redeploy.
+2. On a phone: Account → **Turn alerts on this phone** → allow → **Send a Test Alert**.
+   iPhone needs iOS 16.4+ and PicknPlay added to the Home Screen first.
+3. Keep the same VAPID keys forever: changing them silently stops alerts on every phone until people switch alerts on again.
+
+**Voice chat (LiveKit Cloud)**
+1. At cloud.livekit.io create a project → **Settings → Keys** → create an API key. Copy the **WebSocket URL**
+   (`wss://<project>.livekit.cloud`), the **API key** and the **secret**.
+2. Vercel → Environment Variables: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Redeploy.
+3. Sign in as an admin → Admin → switch **Voice chat at tables** on (it stays greyed out until the 3 settings exist).
+4. At a table (or in the waiting room) tap 🎙, allow the microphone. The connection stays up from the waiting room to the
+   table; tap "Voice · N" to see who's in, 🎙/🔇 to mute, ✕ to leave. Seats show 🎧 (in voice), 🔇 (muted) and a blue ring while talking.
+Only seated players get a voice pass (3 hours, one table's room, microphone only — no camera, no data).

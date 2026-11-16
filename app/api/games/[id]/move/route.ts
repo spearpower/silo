@@ -2,7 +2,7 @@ import { after } from 'next/server';
 import { body, fail, json, rateLimited, withUser } from '@/lib/http';
 import { move } from '@/lib/games';
 import { notifyGame } from '@/lib/realtime';
-import { alertTurn } from '@/lib/push';
+import { alertFinished, alertTurn } from '@/lib/push';
 import { Action } from '@/lib/engine';
 import { isSuit } from '@/lib/card-codes';
 
@@ -36,7 +36,8 @@ export const POST = withUser(async (user, req: Request, ctx: Ctx) => {
 	if (r.changed) after(async () => {
 		await notifyGame(gameId, r.version);
 		// the turn may have passed to someone who isn't looking: buzz their phone
-		await alertTurn(gameId);
+		if (r.status === 'finished') await alertFinished(gameId);
+		else await alertTurn(gameId);
 	});
 	return json(r);
 });

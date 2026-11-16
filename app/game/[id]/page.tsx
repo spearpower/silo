@@ -53,6 +53,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	const [party, setParty] = useState<null | 'win' | 'cut'>(null);
 	const bubbleSeq = useRef(0);
 	const seenSeq = useRef<number | null>(null);
+	const prevCounts = useRef<Record<number, number>>({});
 	const bubble = useCallback((text: string, kind: BubbleKind, ms = 2600) => {
 		const bid = ++bubbleSeq.current;
 		setBubbles(b => [...b.slice(-2), { id: bid, text, kind }]);
@@ -85,7 +86,12 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	useEffect(() => {
 		const v = serverView;
 		if (!v) return;
-		if (seenSeq.current === null) { seenSeq.current = v.seq; return; } // first load: don't replay old events
+		if (seenSeq.current === null) { // first load: don't replay old events (a fresh deal gets the dealing sound)
+			seenSeq.current = v.seq;
+			prevCounts.current = Object.fromEntries(v.players.map(p => [p.id, p.handCount]));
+			if (v.moves === 0 && !v.finished) playSound('deal');
+			return;
+		}
 		const fresh = v.events.filter(e => e.n > seenSeq.current!);
 		seenSeq.current = v.seq;
 		const who = (pid: number) => (pid === me ? 'You' : names[pid]?.username || 'Someone');
@@ -95,15 +101,15 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 			switch (e.t) {
 				case 'play':
 					if (e.by !== me) {
-						setTimeout(() => { fly(`[data-seat="${e.by}"]`, '[data-drop="discard"]', cardSrc(e.card), 460); playSound('discard'); }, at);
+						setTimeout(() => { fly(`[data-seat="${e.by}"]`, '[data-drop="discard"]', cardSrc(e.card), 460); playSound('play'); }, at);
 						delay += 380;
 					}
-					if (e.suit && e.by !== me) setTimeout(() => bubble(`${who(e.by)} called ${SUIT_SYMBOLS[e.suit!]} ${SUIT_NAMES[e.suit!]}`, 'info', 2600), at + 300);
-					if (e.cut) setTimeout(() => { bubble(`✂️ ${who(e.by)} cut with ${suitSym(e.card)}!`, 'round', 3600); playSound('round'); }, at + 200);
+					if (e.suit && e.by !== me) setTimeout(() => { bubble(`${who(e.by)} called ${SUIT_SYMBOLS[e.suit!]} ${SUIT_NAMES[e.suit!]}`, 'info', 2600); playSound('suit'); }, at + 300);
+					if (e.cut) setTimeout(() => { bubble(`✂️ ${who(e.by)} cut with ${suitSym(e.card)}!`, 'round', 3600); playSound('cut'); haptic([40, 30, 80]); }, at + 200);
 					break;
 				case 'draw':
 					if (e.by !== me) {
-						for (let k = 0; k < Math.min(e.count, 5); k++) setTimeout(() => fly('[data-drop="deck"]', `[data-seat="${e.by}"]`, CARD_BACK, 420), at + k * 140);
+						for (let k = 0; k < Math.min(e.count, 5); k++) setTimeout(() => { fly('[data-drop="deck"]', `[data-seat="${e.by}"]`, CARD_BACK, 420); playSound('draw'); }, at + k * 140);
 						delay += 200 + Math.min(e.count, 5) * 140;
 					}
 					if (e.penalty) setTimeout(() => bubble(`${who(e.by)} ${e.by === me ? 'draw' : 'drew'} ${e.count} cards`, 'skip', 2400), at);
@@ -111,26 +117,34 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 				case 'penalty':
 					setTimeout(() => {
 						bubble(e.target === me ? `Draw ${e.amount}! ${penaltyName(e.kind)} played on you` : `Draw ${e.amount} → ${who(e.target)}`, 'skip', 2800);
-						playSound('skip');
+						playSound(e.target === me ? 'hit' : 'penalty');
 						if (e.target === me) haptic([60, 40, 60]);
 					}, at + 150);
 					break;
-				case 'cancel': setTimeout(() => { bubble(`🛡️ ${who(e.by)} cancelled the draw ${e.amount}`, 'phase', 2800); playSound('phase'); }, at + 150); break;
+				case 'cancel': setTimeout(() => { bubble(`🛡️ ${who(e.by)} cancelled the draw ${e.amount}`, 'phase', 2800); playSound('cancel'); }, at + 150); break;
 				case 'skip': setTimeout(() => { bubble(e.target === me ? `${who(e.by)} skipped you` : `${who(e.target)} is skipped`, 'skip', 2400); playSound('skip'); }, at + 150); break;
-				case 'reverse': setTimeout(() => bubble('🔄 Direction reversed', 'info', 2200), at + 150); break;
+				case 'reverse': setTimeout(() => { bubble('🔄 Direction reversed', 'info', 2200); playSound('reverse'); }, at + 150); break;
 				case 'again': if (e.by !== me) setTimeout(() => bubble(`${who(e.by)} plays again`, 'info', 2000), at + 150); break;
-				case 'reshuffle': setTimeout(() => bubble('Discard pile reshuffled into a new draw pile', 'info', 2600), at); break;
+				case 'reshuffle': setTimeout(() => { bubble('Discard pile reshuffled into a new draw pile', 'info', 2600); playSound('shuffle'); }, at); break;
 				case 'timeout': setTimeout(() => bubble(`${who(e.by)} ran out of time`, 'info', 2200), at); break;
 				case 'left': setTimeout(() => { bubble(`${who(e.by)} left the table`, 'skip', 3000); playSound('skip'); }, at); break;
 			}
 		}
+		// someone is down to their last card
+		if (!v.finished) for (const p of v.players) {
+			const before = prevCounts.current[p.id];
+			if (p.id !== me && p.handCount === 1 && before !== undefined && before > 1) {
+				setTimeout(() => { bubble(`☝️ ${who(p.id)} has one card left!`, 'skip', 2600); playSound('lastcard'); }, delay + 250);
+			}
+		}
+		prevCounts.current = Object.fromEntries(v.players.map(p => [p.id, p.handCount]));
 		if (v.finished && fresh.length) {
 			const f = v.finished;
 			const winners = f.standings.filter(s => s.rank === 1).map(s => s.id);
 			const iWon = winners.includes(me);
 			setTimeout(() => {
 				bubble(iWon ? 'You win!' : `${winners.map(who).join(' & ')} ${winners.length > 1 ? 'win' : 'wins'}!`, 'win', 5000);
-				playSound('win'); haptic(60); setParty(iWon ? 'win' : 'cut');
+				playSound(iWon ? 'win' : 'lose'); haptic(iWon ? [60, 40, 60, 40, 120] : 60); setParty(iWon ? 'win' : 'cut');
 			}, delay + (f.how === 'cut' ? 900 : 200));
 		}
 	}, [serverView, me, names, bubble]);
@@ -150,6 +164,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	useEffect(() => { if (selected && view && !view.playable.includes(selected)) setSelected(null); }, [view, selected]);
 
 	const myTurn = !!view && view.turn === me && !view.finished;
+
+	// Away from the tab: show it in the title, and (if alerts are allowed) a notification on this device
+	useEffect(() => {
+		const base = `Game ${id} · PicknPlay`;
+		const apply = () => { document.title = myTurn && document.visibilityState === 'hidden' ? `🔔 Your turn · ${base}` : base; };
+		apply();
+		if (myTurn && document.visibilityState === 'hidden' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+			const pen = viewRef.current?.penalty;
+			navigator.serviceWorker?.getRegistration().then(reg => reg?.showNotification(pen ? `Draw ${pen.amount}! Your turn` : 'Your turn', {
+				body: pen ? `Answer the penalty or draw in game ${id}.` : `It’s your turn in game ${id}.`,
+				icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: `turn-${id}`, data: { url: `/game/${id}` },
+			})).catch(() => {});
+		}
+		document.addEventListener('visibilitychange', apply);
+		return () => { document.removeEventListener('visibilitychange', apply); document.title = 'PicknPlay'; };
+	}, [myTurn, id]);
 	useEffect(() => {
 		if (myTurn && !wasMyTurn.current) { haptic([90, 60, 90]); playTurnSound(); if (seenSeq.current !== null) bubble('Your turn!', 'turn', 1600); }
 		wasMyTurn.current = myTurn;
@@ -160,7 +190,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		if (!data?.deadline || data.status !== 'playing' || !data.isMember) { setLeft(null); return; }
 		const tick = () => {
 			const s = Math.max(0, Math.ceil((new Date(data.deadline!).getTime() - serverNow()) / 1000));
-			setLeft(s);
+			setLeft(prev => { if (s !== prev && s > 0 && s <= 5 && viewRef.current?.turn === data.me) playSound('tick'); return s; });
 			if (s === 0 && reported.current !== data.deadline) {
 				reported.current = data.deadline;
 				api<GameData>(`/api/games/${id}/move`, { type: 'timeout' }).then(accept).catch(() => refresh());
@@ -181,6 +211,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	const send = useCallback((action: Action) => {
 		const cur = viewRef.current;
 		const predicted = cur ? predict(cur, me, action) : null;
+		if (action.type === 'play') playSound(action.cut ? 'cut' : 'play');
+		else if (action.type === 'draw') playSound('draw');
 		if (predicted) setOptimistic(predicted);
 		setSelected(null);
 		inflight.current++;
@@ -254,6 +286,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		if (view.finished || data.status !== 'playing') return;
 		if (!myTurn) { setSelected(s => (s === card ? null : card)); return say('Wait for your turn'); }
 		if (!view.playable.includes(card)) {
+			playSound('error');
 			if (view.step === 'drawn') return say('After drawing you may only play the card you drew — or keep it');
 			if (pen) return say(pen.kind === '2' ? `Only a 2 or an Ace can answer — or draw ${pen.amount}` : `Only a ${penaltyName(pen.kind)} or the A♠ can answer — or draw ${pen.amount}`);
 			if (rankOf(card) === 'A') return say('An Ace can’t go on a 2');

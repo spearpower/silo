@@ -5,7 +5,7 @@ import DeleteAccount from '@/components/DeleteAccount';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { AVATARS, avatarUrl } from '@/lib/avatars';
-import { soundOn, setSoundOn, initSound } from '@/lib/sound';
+import { soundOn, setSoundOn, initSound, soundVolume, setSoundVolume, playSound } from '@/lib/sound';
 import { ErrorBanner, NavBar, Skeleton, TabBar, Chevron } from '@/components/ui';
 
 interface Account { id: number; username: string; fullname: string; email: string | null; phone: string | null; photo: string; role: 'player' | 'admin' | 'superadmin' }
@@ -17,10 +17,12 @@ export default function AccountPage() {
 	const [pw, setPw] = useState({ current: '', next: '', repeat: '' });
 	const [pwMsg, setPwMsg] = useState(''); const [pwError, setPwError] = useState('');
 	const [sound, setSound] = useState(true);
+	const [volume, setVolume] = useState(80);
 
 	useEffect(() => {
 		initSound();
 		setSound(soundOn());
+		setVolume(Math.round(soundVolume() * 100));
 		api<Account>('/api/account').then(a => {
 			setAcc(a);
 			setForm({ username: a.username, fullname: a.fullname, email: a.email || '', phone: a.phone || '', photo: a.photo });
@@ -103,9 +105,17 @@ export default function AccountPage() {
 
 				<div className="section-title">Sound</div>
 				<div className="switch-row" style={{ marginTop: 0 }}>
-					<label htmlFor="snd">Chime when it’s my turn</label>
+					<label htmlFor="snd">Game sounds</label>
 					<span className="switch"><input id="snd" type="checkbox" role="switch" checked={sound} onChange={e => { setSound(e.target.checked); setSoundOn(e.target.checked); }} /><span /></span>
 				</div>
+				<div className="volume-row">
+					<label htmlFor="vol">Volume</label>
+					<input id="vol" type="range" min={0} max={100} step={5} value={volume} disabled={!sound}
+						onChange={e => { const v = Number(e.target.value); setVolume(v); setSoundVolume(v / 100); }}
+						onPointerUp={() => playSound('play', true)} onKeyUp={() => playSound('play', true)} aria-valuetext={`${volume}%`} />
+					<span className="vol-val">{volume}%</span>
+				</div>
+				<p className="hint">Your turn, cards played and drawn, penalties, cuts and wins. On this device only. The 🔔 on the table mutes them too.</p>
 
 				<form onSubmit={changePw} noValidate>
 					<div className="section-title">Change password</div>

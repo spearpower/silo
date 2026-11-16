@@ -8,6 +8,7 @@ import PinSheet from '@/components/PinSheet';
 import { LEVELS } from '@/lib/levels';
 import { variantInfo } from '@/lib/rules';
 import InviteFriends from '@/components/InviteFriends';
+import VoiceChat from '@/components/VoiceChat';
 
 const TIMERS = [0, 15, 20, 30, 40, 60];
 
@@ -23,7 +24,8 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 	const [inviteOpen, setInviteOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const [vfOn, setVfOn] = useState(false);
-	useEffect(() => { api<{ virtualFriends: boolean }>('/api/settings').then(s => setVfOn(s.virtualFriends)).catch(() => {}); }, []);
+	const [voiceOn, setVoiceOn] = useState(false);
+	useEffect(() => { api<{ virtualFriends: boolean; voiceChat: boolean }>('/api/settings').then(s => { setVfOn(s.virtualFriends); setVoiceOn(!!s.voiceChat); }).catch(() => {}); }, []);
 
 	// Quick Game: if nobody joins within 30 s, fill the empty seats with Virtual Friends and start
 	const [quick, setQuick] = useState(false);
@@ -103,7 +105,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 				<div className="section-title">Players · {data.players.length}/6</div>
 				<div className="list" aria-live="polite">
 					{data.players.map(p => (
-						<div className="list-row" key={p.id}>
+						<div className="list-row lobby-seat" key={p.id} data-seat={p.id}>
 							<img className="av" src={avatar(p.photo)} alt="" />
 							<span className="main">
 								<span className="title">{p.username}{p.id === myId ? ' (you)' : ''}</span>
@@ -185,6 +187,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 				</div></div>
 			</main>
 			{inviteOpen && <InviteFriends gameId={id} onClose={() => setInviteOpen(false)} />}
+			<VoiceChat gameId={id} enabled={voiceOn && data.isMember && (data.status === 'lobby' || data.status === 'playing')} />
 			{pinOpen && <PinSheet gameId={id} onClose={() => setPinOpen(false)} onSubmit={async pin => { await api(`/api/games/${id}/join`, { pin }); setPinOpen(false); await refresh(); }} />}
 		</div>
 	);

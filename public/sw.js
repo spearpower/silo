@@ -4,13 +4,14 @@
  * - Navigations fall back to /offline.html when the network is down.
  * Bump VERSION when the precached files change.
  */
-const VERSION = 'picknplay-v1.0.0';
+const VERSION = 'picknplay-v1.1.0';
 const STATIC_CACHE = VERSION + '-static';
 
 // Card back and Jokers up front; the 52 face cards are cached the first time they are shown (cache-first below).
 const CARDS = ['/cards/back.svg', '/cards/XR.svg', '/cards/XB.svg'];
 
-const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png', '/sounds/turn.wav', '/sounds/discard.wav', '/sounds/phase.wav', '/sounds/round.wav', '/sounds/win.wav', '/sounds/skip.wav', '/sounds/chat.wav'].concat(CARDS);
+const SOUNDS = ['turn', 'chat', 'deal', 'play', 'draw', 'shuffle', 'penalty', 'hit', 'cancel', 'suit', 'skip', 'reverse', 'cut', 'lastcard', 'win', 'lose', 'tick', 'error'].map(n => '/sounds/' + n + '.wav');
+const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'].concat(SOUNDS, CARDS);
 
 self.addEventListener('install', event => {
 	event.waitUntil(caches.open(STATIC_CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

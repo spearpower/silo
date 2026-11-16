@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import PwaClient from '@/components/PwaClient';
+import TurnWatcher from '@/components/TurnWatcher';
+import VoiceGuard from '@/components/VoiceGuard';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,6 +31,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			<body>
 				{children}
 				<PwaClient />
+				<TurnWatcher />
+				<VoiceGuard />
 			</body>
 		</html>
 	);

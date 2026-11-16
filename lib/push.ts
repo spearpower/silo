@@ -49,13 +49,45 @@ export async function removeSubscription(userId: number, endpoint: string) {
 
 /** "Your turn" — only if that person isn't looking at the table right now (seen in the last 25 s). */
 export async function alertTurn(gameId: number): Promise<void> {
-	const [t] = await sql<{ user_id: number }[]>`
-		select g.turn_user_id as user_id from games g
+	const [t] = await sql<{ user_id: number; penalty: { kind: string; amount: number } | null; variant: string }[]>`
+		select g.turn_user_id as user_id, g.state->'penalty' as penalty, g.variant from games g
 		join users u on u.id = g.turn_user_id
 		join game_players p on p.game_id = g.id and p.user_id = g.turn_user_id
 		where g.id = ${gameId} and g.status = 'playing' and not u.is_bot and p.left_at is null
 		  and p.last_seen < now() - interval '25 seconds'`.catch(() => [] as never[]);
-	if (t) await notifyUsers([t.user_id], { title: 'Your turn', body: `It’s your turn in game ${gameId}.`, url: `/game/${gameId}`, tag: `turn-${gameId}` });
+	if (!t) return;
+	const pen = t.penalty;
+	const body = pen
+		? `Draw ${pen.amount} is waiting for you in game ${gameId} — answer it with ${pen.kind === '2' ? 'a 2 or an Ace' : pen.kind === '3' ? 'a 3 or the A♠' : 'a Joker or the A♠'}, or draw.`
+		: `It’s your turn in game ${gameId}.`;
+	await notifyUsers([t.user_id], { title: pen ? `Draw ${pen.amount}! Your turn` : 'Your turn', body, url: `/game/${gameId}`, tag: `turn-${gameId}` });
+}
+
+/** "Game over" — to everyone at the table who isn't watching it: who won and how. */
+export async function alertFinished(gameId: number): Promise<void> {
+	const rows = await sql<{ user_id: number; final_rank: number | null; finished: { how: string; by: number | null; standings: { id: number; rank: number }[] } | null }[]>`
+		select p.user_id, p.final_rank, g.state->'finished' as finished from game_players p
+		join users u on u.id = p.user_id join games g on g.id = p.game_id
+		where p.game_id = ${gameId} and g.status = 'finished' and not u.is_bot and p.left_at is null
+		  and p.last_seen < now() - interval '25 seconds'`.catch(() => [] as never[]);
+	if (!rows.length || !rows[0].finished) return;
+	const f = rows[0].finished;
+	const winnerIds = f.standings.filter(s => s.rank === 1).map(s => s.id);
+	const names = await sql<{ id: number; username: string }[]>`select id, username from users where id in ${sql(winnerIds)}`.catch(() => [] as never[]);
+	const winners = names.map(n => n.username).join(' & ') || 'Someone';
+	const how = f.how === 'cut' ? 'after a cut' : f.how === 'out' ? 'by going out' : 'on points';
+	await Promise.all(rows.map(r => notifyUsers([r.user_id], {
+		title: r.final_rank === 1 ? 'You won! 🏆' : `${winners} won`,
+		body: r.final_rank === 1 ? `You won game ${gameId} ${how}.` : `Game ${gameId} is over (${how}). You came ${ordinal(r.final_rank ?? 0)}.`,
+		url: `/game/${gameId}`, tag: `turn-${gameId}`,
+	})));
+}
+
+const ordinal = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
+
+/** A test alert to the signed-in player's own phones (Account page). Returns how many phones it reached. */
+export async function alertTest(userId: number): Promise<number> {
+	return notifyUsers([userId], { title: 'PicknPlay alerts work 🎉', body: 'This is how you’ll hear about your turn, invites and results.', url: '/account', tag: 'test' });
 }
 
 /** "Game started" — to everyone at the table who isn't watching the waiting room. */
