@@ -210,6 +210,23 @@ describe('PicknPlay Super penalties', () => {
 		expect(s.penalty).toBeNull();
 	});
 
+	it('after a Joker is picked up, the next card follows the Joker’s colour', () => {
+		// black Joker: any black card (spades or clubs) fits, red cards don't
+		const b = table({ variant: 'super', hands: [['XB', '4C'], ['KD', '2S'], ['5C', '9H', 'QS']], top: '9H' });
+		apply(b, 1, { type: 'play', card: 'XB' });
+		apply(b, 2, { type: 'draw' });                                   // picks the 5
+		expect(viewFor(b, 3).playable.sort()).toEqual(['5C', 'QS']);
+		expect(() => apply(b, 3, { type: 'play', card: '9H' })).toThrow(/black/);
+		apply(b, 3, { type: 'play', card: 'QS' });
+		expect(b.suit).toBe('S');
+		// red Joker: any red card (hearts or diamonds) fits, black cards don't
+		const r = table({ variant: 'super', hands: [['XR', '4C'], ['KS', '2S'], ['5D', '9C', 'QH']], top: '9S' });
+		apply(r, 1, { type: 'play', card: 'XR' });
+		apply(r, 2, { type: 'draw' });
+		expect(viewFor(r, 3).playable.sort()).toEqual(['5D', 'QH']);
+		expect(() => apply(r, 3, { type: 'play', card: '9C' })).toThrow(/red/);
+	});
+
 	it('in Classic a 3 has no effect', () => {
 		const s = table({ hands: [['3H', '4C'], ['5H'], ['7D']], top: '9H' });
 		apply(s, 1, { type: 'play', card: '3H' });

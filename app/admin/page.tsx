@@ -126,7 +126,7 @@ function RulesForm({ rules, save }: { rules: RuleOptions; save: (p: Partial<Rule
 				note="rules.MD gives Jokers no point value." />
 			<Choice id="r-jon" label="A Joker can be played on" value={rules.jokerOnAnything ? 'any' : 'joker'} options={[['any', 'Any card'], ['joker', 'Only a Joker']]}
 				onPick={v => save({ jokerOnAnything: v === 'any' }, v === 'any' ? 'Jokers can be played on any card' : 'Jokers can only be played on a Joker')}
-				note="rules.MD doesn’t say. A Joker keeps the suit that was being followed." />
+				note="The card after a Joker always follows its colour: black cards on the black Joker, red cards on the red one." />
 		</div>
 	);
 }

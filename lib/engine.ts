@@ -201,6 +201,8 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 			throw new GameError(`Play a ${penaltyName(k)} or the Ace of Spades, or draw ${s.penalty.amount}`);
 		}
 		if (rankOf(card) === 'A') throw new GameError('An Ace can’t be played on a 2');
+		const top = s.discard[0];
+		if (top && isJoker(top)) throw new GameError(`Play a ${top === 'XR' ? 'red (♥ ♦)' : 'black (♠ ♣)'} card on the ${top === 'XR' ? 'red' : 'black'} Joker`);
 		throw new GameError(`Play a ${SUIT_NAMES[s.suit]} card or a matching rank`);
 	}
 	const cancelling = !!s.penalty && cancels(card, s.penalty);   // the A♠ stops a penalty and names no suit
@@ -226,7 +228,7 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 	s.drawn = null;
 	s.open = false;
 	if (isAce) s.suit = suit!;
-	else if (!isJoker(card)) s.suit = suitOf(card)!;          // a Joker keeps the suit being followed
+	else if (!isJoker(card)) s.suit = suitOf(card)!;          // a Joker keeps the suit; the next card follows the Joker's colour (rules.ts canPlay)
 	event(s, { t: 'play', by: me, card, ...(isAce ? { suit } : {}), ...(cutting ? { cut: true } : {}) });
 	log(s, `${who(me)} played ${cardShort(card)}${isAce ? ` · asks for ${SUIT_NAMES[suit!]}` : ''}`);
 

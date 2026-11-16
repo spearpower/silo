@@ -1,7 +1,7 @@
 // PicknPlay rules: the variants, the configurable "items to agree before play" (rules.MD §5),
 // and the pure matching logic shared by the server engine, the Virtual Friends and the board.
 // rules.MD is the authority; anything it leaves open lives in RuleOptions with a documented default.
-import { BLACK_SPADE_ACE, Card, isJoker, rankOf, Suit, suitOf, Variant } from './card-codes';
+import { BLACK_SPADE_ACE, Card, isJoker, isRed, rankOf, Suit, suitOf, Variant } from './card-codes';
 
 export interface VariantInfo { id: Variant; name: string; short: string; blurb: string; deck: number }
 
@@ -118,7 +118,8 @@ export interface Table {
  *  - A penalty is waiting: only a matching penalty card (passes it on) or the A♠ (cancels it).
  *  - Right after a cancel (open table): any card.
  *  - An Ace goes on anything except a 2.
- *  - A Joker (Super) goes on anything (rule option), and keeps the suit that was being followed.
+ *  - A Joker (Super) goes on anything (rule option). After it, the next card must match the Joker's colour:
+ *    any black card (♠ ♣) on the black Joker, any red card (♥ ♦) on the red Joker (or another Joker, or an Ace).
  *  - Otherwise: same suit as the suit to follow, or same rank as the top card.
  */
 export function canPlay(t: Table, c: Card): boolean {
@@ -130,6 +131,7 @@ export function canPlay(t: Table, c: Card): boolean {
 	if (!t.top || t.open) return true;
 	if (isJoker(c)) return t.rules.jokerOnAnything || isJoker(t.top);
 	if (rankOf(c) === 'A') return rankOf(t.top) !== '2';
+	if (isJoker(t.top)) return isRed(c) === isRed(t.top);   // Joker on top: follow its colour
 	if (t.suit && suitOf(c) === t.suit) return true;
 	return !isJoker(t.top) && rankOf(c) === rankOf(t.top);
 }

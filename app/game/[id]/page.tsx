@@ -303,7 +303,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 			if (view.step === 'drawn') return say('You can only play the card you just drew, or keep it');
 			if (pen) return say(`Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
 			if (rankOf(card) === 'A') return say('An Ace can’t go on a 2');
-			return say(`That one doesn’t fit. Play ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? (isJoker(top) ? 'Joker' : rankOf(top)) : ''}`);
+			if (top && isJoker(top)) return say(`That one doesn’t fit. Play a ${top === 'XR' ? 'red card (♥ ♦)' : 'black card (♠ ♣)'} on the ${top === 'XR' ? 'red' : 'black'} Joker`);
+			return say(`That one doesn’t fit. Play ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? rankOf(top) : ''}`);
 		}
 		haptic(6);
 		if (selected === card) playCard(card);
@@ -375,6 +376,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 				</div>
 				<div className="table-chips">
 					{view.open ? <span className="chip suit open" title="The A♠ cooled a penalty">Any card goes</span>
+						: top && isJoker(top) ? <span className={`chip suit ${top === 'XR' ? 's-H' : 's-S'}`} title="Follow the Joker's colour">Follow <b>{top === 'XR' ? '♥♦' : '♠♣'}</b> {top === 'XR' ? 'Red' : 'Black'}</span>
 						: <span className={`chip suit s-${view.suit}`} title="Suit to follow">Follow <b>{SUIT_SYMBOLS[view.suit]}</b> {SUIT_NAMES[view.suit]}</span>}
 					<span className="chip cutter" title={`Cutter card: ${cardLabel(view.cutter)}${view.cutterInDeck ? '' : ' (drawn)'}`}>✂️ <b>{suitSym(view.cutSeven)}</b> cuts{view.cutBelow !== null ? ` · under ${view.cutBelow}` : ''}</span>
 					<span className="chip dir" title="Direction of play">{view.direction === 1 ? '↻' : '↺'} {view.direction === 1 ? 'Clockwise' : 'Reversed'}</span>

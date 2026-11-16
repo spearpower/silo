@@ -161,7 +161,12 @@ Use the same turn sequence and matching rules as PicknPlay Classic:
                                       The penalty accumulates by 5 for
                                       each Joker played. **Only the Black
                                       Spade Ace** cancels a Joker
-                                      penalty.
+                                      penalty. After the penalty is
+                                      picked, the next card must match
+                                      the Joker's colour: any black card
+                                      (spades or clubs) on the black
+                                      Joker, any red card (hearts or
+                                      diamonds) on the red Joker.
 
   **8**                               In a two-player game, the player
                                       who plays an 8 gets another play.
