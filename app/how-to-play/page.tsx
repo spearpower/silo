@@ -1,7 +1,7 @@
 import { NavBar } from '@/components/ui';
 import HowToPlay from '@/components/HowToPlay';
 
-export const metadata = { title: 'How to Play · Rummy10' };
+export const metadata = { title: 'How to Play · PicknPlay' };
 
 export default function HowToPlayPage() {
 	return (

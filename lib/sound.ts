@@ -8,7 +8,7 @@ const FILES: Record<SoundName, string> = {
 	round: '/sounds/round.wav', win: '/sounds/win.wav', skip: '/sounds/skip.wav', chat: '/sounds/chat.wav',
 };
 const VOLUME: Record<SoundName, number> = { turn: 0.8, discard: 0.55, phase: 0.75, round: 0.8, win: 0.85, skip: 0.7, chat: 0.6 };
-const KEY = 'rummy10.sound';
+const KEY = 'picknplay.sound';
 const players: Partial<Record<SoundName, HTMLAudioElement>> = {};
 let armed = false;
 

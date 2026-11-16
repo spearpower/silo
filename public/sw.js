@@ -1,15 +1,14 @@
-/* Rummy10 service worker (Next.js build).
+/* PicknPlay service worker (Next.js build).
  * - Cache-first for hashed build files (/_next/static) and the card/avatar/icon art.
  * - Never caches pages or /api: they carry the signed-in player and live game state.
  * - Navigations fall back to /offline.html when the network is down.
  * Bump VERSION when the precached files change.
  */
-const VERSION = 'rummy10-v3.6.0';
+const VERSION = 'picknplay-v1.0.0';
 const STATIC_CACHE = VERSION + '-static';
 
-const CARDS = [];
-['r', 'b', 'y', 'g'].forEach(c => { for (let n = 1; n <= 12; n++) CARDS.push('/cards/' + c + n + '.svg'); });
-['ww', 'ss', 'back'].forEach(n => CARDS.push('/cards/' + n + '.svg'));
+// Card back and Jokers up front; the 52 face cards are cached the first time they are shown (cache-first below).
+const CARDS = ['/cards/back.svg', '/cards/XR.svg', '/cards/XB.svg'];
 
 const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png', '/sounds/turn.wav', '/sounds/discard.wav', '/sounds/phase.wav', '/sounds/round.wav', '/sounds/win.wav', '/sounds/skip.wav', '/sounds/chat.wav'].concat(CARDS);
 
@@ -20,7 +19,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
 	event.waitUntil(
 		caches.keys()
-			.then(keys => Promise.all(keys.filter(k => (k.startsWith('rummy10-') || k.startsWith('sofi10-')) && k !== STATIC_CACHE).map(k => caches.delete(k))))
+			.then(keys => Promise.all(keys.filter(k => k.startsWith('picknplay-') && k !== STATIC_CACHE).map(k => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
@@ -52,8 +51,8 @@ self.addEventListener('fetch', event => {
 // ---------- Phone alerts (Web Push) ----------
 self.addEventListener('push', event => {
 	let d = {};
-	try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'Rummy10', body: event.data ? event.data.text() : '' }; }
-	const title = d.title || 'Rummy10';
+	try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'PicknPlay', body: event.data ? event.data.text() : '' }; }
+	const title = d.title || 'PicknPlay';
 	event.waitUntil(self.registration.showNotification(title, {
 		body: d.body || '',
 		icon: '/icons/icon-192.png',

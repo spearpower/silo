@@ -1,4 +1,4 @@
-"""Synthesizes the original Rummy10 game sounds into public/sounds/ (all mono 22.05 kHz, 16-bit WAV).
+"""Synthesizes the original PicknPlay game sounds into public/sounds/ (all mono 22.05 kHz, 16-bit WAV).
   discard.wav  soft card swish/slap
   phase.wav    rising sparkle arpeggio (a player completed a phase)
   round.wav    short fanfare (a player went out and won the round)

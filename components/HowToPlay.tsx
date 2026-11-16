@@ -1,53 +1,70 @@
 'use client';
-// How to play Rummy10 (Classic and Twist). Used on /how-to-play and inside the table menu during a game.
-import { useState } from 'react';
-import { RULESETS } from '@/lib/rulesets';
+// How to play PicknPlay (Classic and Super), following rules.MD. Used on /how-to-play and in the table menu.
+// The house-rule options an admin can change are read from the server, so the text matches the real game.
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/client';
+import { DEFAULT_RULES, RuleOptions, VARIANTS } from '@/lib/rules';
+import type { Variant } from '@/lib/card-codes';
 
-export default function HowToPlay({ edition }: { edition?: number }) {
-	const [shown, setShown] = useState(edition === 2 ? 2 : 1);
-	const rs = RULESETS.find(r => r.id === shown)!;
+export default function HowToPlay({ variant }: { variant?: Variant }) {
+	const [shown, setShown] = useState<Variant>(variant || 'classic');
+	const [rules, setRules] = useState<RuleOptions>(DEFAULT_RULES);
+	useEffect(() => { api<{ rules?: RuleOptions }>('/api/settings').then(s => s.rules && setRules(s.rules)).catch(() => {}); }, []);
+	const sup = shown === 'super';
+	const cutBelow = sup ? rules.superCutBelow : rules.classicCutBelow;
 	return (
 		<div className="howto">
-			<p>Be the first to get through all <b>10 phases</b>. Each round everyone is dealt 10 cards and works on their own phase.</p>
+			<p><b>PicknPlay</b> is a shedding card game: match the top card of the discard pile by <b>suit or rank</b>, use special cards to change the play, and be the first to <b>empty your hand</b> — or end the game with a <b>cut</b> while your hand is low.</p>
+
+			<div className="segmented" role="radiogroup" aria-label="Variant" style={{ margin: '12px 0' }}>
+				{VARIANTS.map(v => <label key={v.id}><input type="radio" name="howto-variant" checked={shown === v.id} onChange={() => setShown(v.id)} /><span>{v.short}{variant === v.id ? ' · this game' : ''}</span></label>)}
+			</div>
+			<p className="small" style={{ marginTop: 0 }}>{VARIANTS.find(v => v.id === shown)!.blurb}</p>
+
+			<h3>Setting up</h3>
+			<ul>
+				<li>{sup ? '54 cards: the standard 52 plus two Jokers.' : 'A standard 52-card deck, no Jokers.'} Everyone gets <b>7 cards</b>.</li>
+				<li>One card is turned face up as the <b>cutter card</b>. It stays visible under the draw pile. Its <b>suit</b> tells you which 7 can cut.</li>
+				<li>The top card of the draw pile starts the discard pile{rules.startDiscard === 'nonSpecial' ? ' (special cards are put back and another is turned)' : ''}.</li>
+			</ul>
 
 			<h3>Your turn</h3>
 			<ol>
-				<li><b>Draw</b> one card: from the deck, or the top of the discard pile.</li>
-				<li><b>Build</b> your phase. Tap a card, then tap a group. When every group is complete, tap <b>Lay Down</b>.</li>
-				<li>After laying down, you may <b>add cards</b> to any laid-down group on the table (yours or anyone’s).</li>
-				<li><b>Discard</b> one card to end your turn.</li>
+				<li><b>Play one card</b> that matches the top card’s <b>suit</b> or <b>rank</b>. Playable cards are lifted in your hand: tap one to play it.</li>
+				<li>Can’t (or don’t want to)? Tap the <b>draw pile</b> to draw one card. If it fits, you may play it straight away, or <b>Keep</b> it and end your turn.</li>
+				<li>When the draw pile runs out, {rules.emptyDeck === 'reshuffle' ? 'the discard pile is shuffled into a new draw pile (its top card stays).' : 'the game ends and hands are counted, like a cut.'}</li>
 			</ol>
-			<p>Stuck? Tap <b>💡 Hint</b> on your turn. It shows which cards to keep, which to throw, and can arrange a complete phase for you.</p>
-
-			<h3>The 10 phases</h3>
-			<div className="segmented" role="radiogroup" aria-label="Rule set" style={{ marginBottom: 10 }}>
-				{RULESETS.map(r => <label key={r.id}><input type="radio" name="howto-rules" checked={shown === r.id} onChange={() => setShown(r.id)} /><span>{r.name}{edition !== undefined && r.id === edition ? ' · this game' : ''}</span></label>)}
-			</div>
-			<p className="small" style={{ marginTop: 0 }}>{rs.blurb}</p>
-			<ol className="phases">{rs.phases.map((p, i) => <li key={i}><span className="pn">{i + 1}</span>{p}</li>)}</ol>
-			<p className="small"><b>Set</b> = cards of the same number (Red 7, Blue 7, Green 7). <b>Run</b> = numbers in order, any colours (3‑4‑5‑6). <b>Colour run</b> = numbers in order, all one colour.</p>
 
 			<h3>Special cards</h3>
-			<ul>
-				<li><b>Wild</b> (8 in the deck) stands in for any card in a set, run or colour group.</li>
-				<li><b>Skip</b> (4 in the deck): discard it and choose a player who misses their next turn. A Skip can’t be picked up from the discard pile.</li>
-			</ul>
-
-			<h3>End of a round</h3>
-			<p>The round ends when someone plays or discards their last card. Players who laid down move to the next phase; the others try the same phase again. Cards left in your hand cost points:</p>
 			<table className="pts"><tbody>
-				<tr><td>1–9</td><td>5 points</td></tr>
-				<tr><td>10–12</td><td>10 points</td></tr>
-				<tr><td>Skip</td><td>15 points</td></tr>
-				<tr><td>Wild</td><td>25 points</td></tr>
+				<tr><td><b>2</b></td><td>The next player draws 2 — unless they play another 2 to pass it on (+2 each time). <b>Any Ace</b> cancels it.</td></tr>
+				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>Black Spade Ace (A♠)</b> cancels it.</td></tr>}
+				{sup && <tr><td><b>Joker</b></td><td>The next player draws 5, or passes it on with the other Joker (+5). Only the <b>A♠</b> cancels it. {rules.jokerOnAnything ? 'A Joker can go on any card and keeps the suit being followed.' : 'A Joker can only go on a Joker.'}</td></tr>}
+				<tr><td><b>8</b></td><td>With 2 players: play again. With more: the next player is <b>skipped</b>.</td></tr>
+				<tr><td><b>Jack</b></td><td>With 2 players: play again. With more: the <b>direction of play reverses</b>.</td></tr>
+				<tr><td><b>Ace</b></td><td>Goes on any card except a 2. You <b>name the suit</b> the next player must follow. It also cancels a 2 penalty.</td></tr>
+			</tbody></table>
+			<p className="small">Facing a penalty you can only pass it on, cancel it with an allowed Ace, or <b>draw the whole amount</b>{rules.penaltyResponse === 'draw' ? ' — which ends your turn' : ' and then play on'}.</p>
+
+			<h3>Cutting</h3>
+			<p>Play the <b>7 of the cutter’s suit</b> and tap <b>Cut</b> to end the game at once. Everyone counts the cards left in their hand — the <b>lowest total wins</b> (the cutter can lose!).
+				{cutBelow !== null && <> In {sup ? 'Super' : 'Classic'} you may only cut when your own hand, after the 7, totals <b>below {cutBelow}</b>.</>}
+				{rules.cutTie === 'share' ? ' A tie for lowest shares the win.' : ' If the cutter ties for lowest, the cutter wins.'}</p>
+			<table className="pts"><tbody>
+				<tr><td>2</td><td>20 points</td></tr>
+				<tr><td>Ace</td><td>15 points{sup && <> · <b>A♠ 60 points</b></>}</td></tr>
+				<tr><td>King · Queen · Jack</td><td>13 · 12 · 11 points</td></tr>
+				<tr><td>3 – 10</td><td>Face value</td></tr>
+				{sup && <tr><td>Joker</td><td>{rules.jokerPoints} points (house rule)</td></tr>}
 			</tbody></table>
 
 			<h3>Winning</h3>
-			<p>The first player to complete Phase 10 ends the game. The highest phase wins; if that’s a tie, the fewest points wins. Everyone earns leaderboard points for their place: with 4 players, 1st gets 4, 2nd gets 3, and so on. Games with Virtual Friends are practice and don’t count.</p>
+			<p><b>Go out</b> (play your last card) and you win outright — or win a <b>cut</b> with the lowest hand. Everyone earns leaderboard points for their place: with 4 players, 1st gets 4, 2nd gets 3, and so on. Games with Virtual Friends are practice and don’t count.</p>
 
 			<h3>Fair play</h3>
 			<ul>
-				<li>With a turn timer, a turn that runs out is played for you.</li>
+				<li>Every move is checked by the server — nobody can see your hand or play out of turn.</li>
+				<li>With a turn timer, a turn that runs out draws a card for you and passes.</li>
 				<li>Miss <b>3 turns in a row</b> and you’re taken out so the table can carry on.</li>
 				<li>The host can remove players or end the game, always with a reason.</li>
 			</ul>

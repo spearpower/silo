@@ -6,7 +6,7 @@ import { GameError } from './engine';
 import { Session } from './session';
 import { getSettings, voiceConfigured } from './settings';
 
-export const roomName = (gameId: number) => `rummy10-game-${gameId}`;
+export const roomName = (gameId: number) => `picknplay-game-${gameId}`;
 
 export async function voicePass(user: Session, gameId: number): Promise<{ url: string; token: string; room: string }> {
 	if (!voiceConfigured()) throw new GameError('Voice chat isn’t set up on this server', 503);

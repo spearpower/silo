@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { isChunkError, reloadForNewVersion, reportError } from '@/lib/report';
 
 interface BeforeInstallPromptEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<unknown> }
-const DISMISSED = 'sofi10.installDismissed';
+const DISMISSED = 'picknplay.installDismissed';
 
 /** Service worker, offline indicator and a polite install prompt (never on the game table). */
 export default function PwaClient() {
@@ -43,9 +43,9 @@ export default function PwaClient() {
 		<>
 			{offline && <div className="offline-pill" role="status">You are offline. Reconnecting…</div>}
 			{showInstall && (
-				<div className="install" role="dialog" aria-label="Install Rummy10" style={path === '/signin' ? { bottom: 'calc(16px + var(--safe-b))' } : undefined}>
+				<div className="install" role="dialog" aria-label="Install PicknPlay" style={path === '/signin' ? { bottom: 'calc(16px + var(--safe-b))' } : undefined}>
 					<img src="/icons/icon-192.png" alt="" />
-					<div className="t"><b>Install Rummy10</b>{prompt ? 'Play full screen from your home screen.' : 'Tap Share, then “Add to Home Screen”.'}</div>
+					<div className="t"><b>Install PicknPlay</b>{prompt ? 'Play full screen from your home screen.' : 'Tap Share, then “Add to Home Screen”.'}</div>
 					{prompt && <button className="btn btn-primary" type="button" onClick={async () => { await prompt.prompt(); dismiss(); }}>Install</button>}
 					<button className="x" type="button" aria-label="Not now" onClick={dismiss}>×</button>
 				</div>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, avatar } from '@/lib/client';
 import { ErrorBanner, NavBar, Skeleton, Chevron } from '@/components/ui';
 
-interface MyGame { id: number; round: number; host: string; photo: string; players: number; my_turn: boolean }
+interface MyGame { id: number; variant: string; moves: number; host: string; photo: string; players: number; my_turn: boolean }
 
 export default function ContinuePage() {
 	const [games, setGames] = useState<MyGame[] | null>(null);
@@ -34,7 +34,7 @@ export default function ContinuePage() {
 								<img className="av" src={avatar(g.photo)} alt="" />
 								<span className="main">
 									<span className="title">{g.host}’s table · Game {g.id}</span>
-									<span className="sub">Round {g.round} · {g.players} players {g.my_turn && <span className="pill mint">Your turn</span>}</span>
+									<span className="sub">{g.variant === 'super' ? 'Super' : 'Classic'} · {g.players} players {g.my_turn && <span className="pill mint">Your turn</span>}</span>
 								</span>
 								<Chevron />
 							</Link>

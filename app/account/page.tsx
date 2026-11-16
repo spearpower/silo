@@ -128,7 +128,7 @@ export default function AccountPage() {
 				<nav className="group">
 					<Link className="row-link" href="/how-to-play">
 						<span className="row-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" /><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5" /></svg></span>
-						<span className="row-text"><span className="row-title">How to Play</span><span className="row-sub">Phases, special cards and scoring</span></span>
+						<span className="row-text"><span className="row-title">How to Play</span><span className="row-sub">Matching, special cards, cutting and scoring</span></span>
 						<Chevron />
 					</Link>
 					<Link className="row-link" href="/privacy">
@@ -156,7 +156,7 @@ export default function AccountPage() {
 				</div>
 
 				<div className="section-title danger-zone">Delete account</div>
-				<p className="hint" style={{ marginTop: 0 }}>Permanently delete your Rummy10 account and your personal data.</p>
+				<p className="hint" style={{ marginTop: 0 }}>Permanently delete your PicknPlay account and your personal data.</p>
 				<DeleteAccount superAdmin={acc.role === 'superadmin'} />
 			</main>
 			<TabBar />

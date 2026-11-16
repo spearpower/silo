@@ -49,6 +49,7 @@ export function withUser<T extends unknown[]>(handler: (user: Session, ...args: 
 		const user = await currentUser();
 		if (!user) return fail('Please sign in again', 401);
 		const req = args.find(a => a instanceof Request) as Request | undefined;
+		if (req && crossSite(req)) return fail('This request came from another site', 403);
 		const blocked = await accountCheck(user, req ? new URL(req.url).pathname : '');
 		if (blocked) return blocked;
 		try {
@@ -63,4 +64,27 @@ export function withUser<T extends unknown[]>(handler: (user: Session, ...args: 
 
 export async function body<T>(req: Request): Promise<Partial<T>> {
 	try { return (await req.json()) as Partial<T>; } catch { return {}; }
+}
+
+/**
+ * CSRF guard for writes: browsers send Origin on POST/PUT/DELETE; it must be this site.
+ * (The session cookie is also SameSite=Lax, and every write needs a JSON body.)
+ */
+export function crossSite(req: Request): boolean {
+	if (req.method === 'GET' || req.method === 'HEAD') return false;
+	const origin = req.headers.get('origin');
+	if (!origin) return false; // same-origin fetches from older browsers / server-to-server calls
+	const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+	try { return new URL(origin).host !== host; } catch { return true; }
+}
+
+/** Small per-instance sliding-window rate limit. True = over the limit. */
+const hits = new Map<string, number[]>();
+export function rateLimited(key: string, max: number, windowMs: number): boolean {
+	const now = Date.now();
+	const list = (hits.get(key) || []).filter(t => now - t < windowMs);
+	list.push(now);
+	hits.set(key, list);
+	if (hits.size > 5000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] > 60000) hits.delete(k);
+	return list.length > max;
 }

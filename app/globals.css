@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Rummy10 app shell — mobile-first, PWA, dark felt-table theme.
+   PicknPlay app shell — mobile-first, PWA, dark felt-table theme.
    Contrast (computed): label #F6F3EA on surface #11563A 7.83:1, label-2 4.91:1,
    ink on gold button 10.92:1, gold on bg 7.13:1.
    One appearance by design: an immersive game table (HIG dark-mode.md › "In rare cases").
@@ -282,9 +282,9 @@ button.list-row:active,a.list-row:active{background:var(--tint)}
    ====================================================================== */
 .board{
 	--ch: clamp(78px, 15dvh, 128px);
-	--cw: calc(var(--ch) * 0.737);
+	--cw: calc(var(--ch) * 0.667);
 	--mh: clamp(40px, 6.6dvh, 62px);
-	--mw: calc(var(--mh) * 0.737);
+	--mw: calc(var(--mh) * 0.667);
 	--ph: clamp(70px, 12dvh, 112px);
 	position:fixed;inset:0;display:grid;
 	grid-template-rows:auto 1fr auto auto auto auto;grid-template-columns:minmax(0,1fr);
@@ -326,7 +326,7 @@ button.list-row:active,a.list-row:active{background:var(--tint)}
 .table-center{grid-area:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:0;padding:6px 10px}
 .piles{display:flex;align-items:flex-start;gap:32px}
 .pilewrap{display:flex;flex-direction:column;align-items:center}
-.pile{position:relative;border:0;padding:0;background:none;height:var(--ph);width:calc(var(--ph) * .737);border-radius:12px;cursor:pointer}
+.pile{position:relative;border:0;padding:0;background:none;height:var(--ph);width:calc(var(--ph) * .667);border-radius:12px;cursor:pointer}
 .pile img{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));pointer-events:none}
 .pile .count{position:absolute;bottom:-8px;right:-10px;min-width:26px;padding:3px 7px;border-radius:999px;background:#062E1E;color:var(--label-2);font:700 12px var(--font);font-variant-numeric:tabular-nums}
 .pile.empty{border:2px dashed rgba(246,243,234,.3)}
@@ -748,3 +748,93 @@ a.icon-btn{text-decoration:none}
 .btn.delete-account{margin-bottom:12px}
 .delete-list{margin:0 0 14px;padding-left:20px;font-size:15px;line-height:1.45;color:var(--label-2)}
 .delete-list li{margin:5px 0}
+
+/* ======================================================================
+   PicknPlay table
+   ====================================================================== */
+.board.pnp{
+	--ch: clamp(84px, 17dvh, 140px);
+	--ph: clamp(82px, 15dvh, 132px);
+	grid-template-rows:auto 1fr auto auto auto;
+	grid-template-areas:"rivals" "center" "actions" "hand" "bar";
+}
+.pnp .rival{gap:4px}
+.pnp .rival.won{box-shadow:0 0 0 3px var(--gold),0 0 18px 2px rgba(242,193,78,.4)}
+.pnp .ribbon.next{background:rgba(246,243,234,.85);color:#06301F}
+.off-badge{display:inline-flex;padding:1px 6px;border-radius:999px;background:rgba(255,138,122,.18);color:var(--danger);font-size:10.5px;font-weight:700;vertical-align:middle}
+.fan{display:flex;height:clamp(26px,4.4dvh,38px);padding-left:4px}
+.fan img{height:100%;width:auto;aspect-ratio:.667;border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.45)}
+.fan img + img{margin-left:calc(clamp(26px,4.4dvh,38px) * -.48)}
+.rivals.compact .fan{height:22px}
+.rivals.compact .fan img + img{margin-left:-14px}
+.last-cards{font-size:11px;font-weight:800;color:#FFB36B;text-transform:uppercase;letter-spacing:.3px}
+
+.pnp .piles{gap:clamp(28px,8vw,56px);align-items:flex-end}
+.pile.deck{overflow:visible}
+.pile.deck .cutter-under{position:absolute;left:50%;top:50%;width:100%;height:auto;aspect-ratio:.667;transform:translate(-18%,-50%) rotate(90deg);z-index:-1;filter:brightness(.97) drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.pile.deck .empty-msg{display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--label-3);border:2px dashed rgba(246,243,234,.3);border-radius:12px}
+.pile.danger{box-shadow:0 0 0 3px #FF8A3D,0 0 18px 4px rgba(255,138,61,.5)}
+.pile .under{position:absolute;inset:0;opacity:.95}
+.pile .under.u1{transform:rotate(-7deg) translate(-4px,2px)}
+.pile .under.u2{transform:rotate(9deg) translate(5px,1px)}
+.pile img.drop-in{position:relative}
+.cutter-pile img{opacity:.95}
+.table-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:100%}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:rgba(4,30,19,.62);color:var(--label-2);font-size:12.5px;font-weight:600;white-space:nowrap}
+.chip b{font-size:15px;color:var(--label)}
+.chip.suit.s-H b,.chip.suit.s-D b{color:#FF6B6B}
+.chip.cutter b{color:var(--gold)}
+.chip.pen{background:#FF8A3D;color:#2A1200;font-weight:800}
+.penalty-banner{margin:10px 0;padding:10px 14px;border-radius:12px;background:#FF8A3D;color:#2A1200;font-weight:700}
+
+.pnp .hand{padding-top:26px}
+.pnp .card{border-radius:calc(var(--cw) * .08)}
+.pnp .card.ok{transform:translateY(-10px);box-shadow:0 0 0 2px var(--mint),0 6px 12px rgba(0,0,0,.45)}
+.pnp .card.dim{filter:brightness(.62) saturate(.8)}
+.pnp .card.sel{transform:translateY(-22px);box-shadow:0 0 0 3px var(--gold),0 10px 16px rgba(0,0,0,.5);z-index:3}
+.pnp .card.cut7::after{content:"✂";position:absolute;top:-9px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--gold);color:var(--ink);font-size:12px;line-height:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.pnp .hand .card + .card{margin-left:min(4px, calc((100% - var(--n) * var(--cw)) / max(var(--n) - 1, 1)))}
+
+.suit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0 6px}
+.suit-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;border-radius:16px;border:0;background:#FFFDF7;color:#111;font:700 15px var(--font);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.suit-btn .sym{font-size:40px;line-height:1}
+.suit-btn.s-H,.suit-btn.s-D{color:#C8102E}
+.suit-btn:active{transform:scale(.97)}
+.suit-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.res-cards{display:flex;flex-wrap:wrap;gap:2px;margin-top:4px;--mh:34px;--mw:calc(34px * .667)}
+.res-cards .mini + .mini{margin-left:-10px}
+
+@media (orientation:landscape) and (max-height:560px){
+	.board.pnp{--ch:clamp(64px,24dvh,104px);--ph:clamp(56px,21dvh,92px);
+		grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);grid-template-rows:auto 1fr auto auto;
+		grid-template-areas:"rivals hand" "center hand" "center actions" "bar bar"}
+	.pnp .hand{align-self:center;flex-wrap:wrap;row-gap:8px}
+}
+@media (min-width:900px) and (min-height:700px){
+	.board.pnp{--ch:clamp(110px,17dvh,150px);--ph:clamp(110px,16dvh,140px)}
+	.pnp .rivals{max-width:1100px;margin:0 auto;width:100%}
+}
+@media (prefers-reduced-motion:no-preference){
+	.pnp .card.ok,.pnp .card.sel{transition:transform .15s cubic-bezier(.2,.8,.2,1),box-shadow .15s}
+	.pile.danger{animation:dangerPulse 1.2s ease-in-out infinite}
+	@keyframes dangerPulse{50%{box-shadow:0 0 0 3px #FF8A3D,0 0 4px 1px rgba(255,138,61,.2)}}
+}
+
+/* Admin: game rules */
+.rules-form{display:flex;flex-direction:column;gap:6px}
+.rule-opt{padding:12px;border-radius:var(--radius);background:var(--surface)}
+.rule-label{font-weight:700;margin-bottom:8px}
+.rule-opt .hint{margin-bottom:0}
+
+/* Variant picker (host, practice) */
+.variant-pick{display:grid;gap:10px}
+.variant-pick label{position:relative;display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:var(--radius);background:var(--surface);cursor:pointer;box-shadow:inset 0 0 0 2px transparent}
+.variant-pick label.on{box-shadow:inset 0 0 0 2px var(--gold);background:var(--surface-2)}
+.variant-pick input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.variant-pick input:focus-visible ~ .vp-text b{outline:2px solid var(--gold);outline-offset:3px}
+.vp-cards{display:flex;flex:0 0 auto}
+.vp-cards img{width:38px;height:57px;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.vp-cards img + img{margin-left:-18px;transform:rotate(10deg)}
+.vp-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.vp-text span{font-size:13px;color:var(--label-2);line-height:1.35}
+.pnp .rivals{grid-template-columns:repeat(var(--rc,1),minmax(0,380px));justify-content:center}

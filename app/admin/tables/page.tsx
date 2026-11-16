@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, avatar } from '@/lib/client';
 import { ErrorBanner, NavBar, Skeleton } from '@/components/ui';
-import { ruleSet } from '@/lib/rulesets';
+import { variantInfo } from '@/lib/rules';
 
 interface Table {
-	id: number; status: 'lobby' | 'playing'; private: boolean; edition: number; host: string; round: number; timer_sec: number;
+	id: number; status: 'lobby' | 'playing'; private: boolean; variant: string; host: string; moves: number; timer_sec: number;
 	updated_at: string; created_at: string; with_bots: boolean; people: number; stale: boolean;
 	players: { id: number; username: string; photo: string; isBot: boolean }[]; turn: string | null;
 }
@@ -58,13 +58,13 @@ export default function TablesPage() {
 							<div key={t.id} className="list-row live-row">
 								<span className="main">
 									<span className="title">
-										Game {t.id}{t.status === 'playing' ? ` · Round ${t.round}` : ''}
+										Game {t.id}{t.status === 'playing' ? ` · ${t.moves} cards played` : ''}
 										{t.with_bots && <span className="badge pill vf">Virtual Friends</span>}
 										{t.private && <span className="badge pill">PIN</span>}
 										{t.stale && <span className="badge pill orange">Stuck</span>}
 									</span>
 									<span className="sub">
-										{ruleSet(t.edition).name} · host {t.host} · {t.people} {t.people === 1 ? 'person' : 'people'} · {t.status === 'playing' ? `last move ${ago(t.updated_at, live.serverNow)}` : `opened ${ago(t.created_at, live.serverNow)}`}
+										{variantInfo(t.variant).name} · host {t.host} · {t.people} {t.people === 1 ? 'person' : 'people'} · {t.status === 'playing' ? `last move ${ago(t.updated_at, live.serverNow)}` : `opened ${ago(t.created_at, live.serverNow)}`}
 										{t.turn ? ` · ${t.turn}’s turn` : ''}
 									</span>
 									<span className="avs">{t.players.map(p => <img key={p.id} src={avatar(p.photo)} alt={p.username} title={p.username + (p.isBot ? ' (Virtual Friend)' : '')} className={p.isBot ? 'bot' : ''} />)}</span>

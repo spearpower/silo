@@ -1,4 +1,4 @@
-// Generates the original Rummy10 avatar faces: public/avatars/f01.svg .. f24.svg
+// Generates the original PicknPlay avatar faces: public/avatars/f01.svg .. f24.svg
 // Usage: node tools/gen_avatars.js public/avatars
 const fs = require('fs');
 const path = require('path');

@@ -8,7 +8,7 @@ import { enablePush, pushState, type PushState } from '@/lib/pushClient';
 
 interface Invite { id: number; gameId: number; from: { id: number; username: string; photo: string }; players: number }
 interface View { invites: Invite[]; incoming: { id: number }[] }
-const DISMISS = 'rummy10.alertsAsked';
+const DISMISS = 'picknplay.alertsAsked';
 
 export default function PlayExtras() {
 	const router = useRouter();
@@ -24,7 +24,7 @@ export default function PlayExtras() {
 		pushState().then(s => {
 			setAlerts(s);
 			let played = false, asked = false;
-			try { played = localStorage.getItem('rummy10.playedOnce') === '1'; asked = localStorage.getItem(DISMISS) === '1'; } catch { /* ignore */ }
+			try { played = localStorage.getItem('picknplay.playedOnce') === '1'; asked = localStorage.getItem(DISMISS) === '1'; } catch { /* ignore */ }
 			setAskAlerts(played && !asked && (s === 'off' || s === 'ios-install'));
 		}).catch(() => {});
 	}, []);
@@ -56,7 +56,7 @@ export default function PlayExtras() {
 			{askAlerts && (
 				<div className="invite-card alerts" role="dialog" aria-label="Turn alerts">
 					<span className="big" aria-hidden="true">🔔</span>
-					<div className="txt"><b>Get a buzz when it’s your turn</b><br /><span>{alerts === 'ios-install' ? 'On iPhone: tap Share → Add to Home Screen, open Rummy10 from there, then turn alerts on in Account.' : 'Also when a friend invites you or a game starts.'}</span></div>
+					<div className="txt"><b>Get a buzz when it’s your turn</b><br /><span>{alerts === 'ios-install' ? 'On iPhone: tap Share → Add to Home Screen, open PicknPlay from there, then turn alerts on in Account.' : 'Also when a friend invites you or a game starts.'}</span></div>
 					<div className="btns">
 						{alerts === 'off' && <button type="button" className="icon-btn gold" onClick={async () => { try { setAlerts(await enablePush()); } catch (e) { setError((e as Error).message); } closeAsk(); }}>Turn On</button>}
 						<button type="button" className="icon-btn" onClick={closeAsk} aria-label="Not now">✕</button>

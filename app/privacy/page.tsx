@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { NavBar } from '@/components/ui';
 
 // Public: readable before and after signing in (middleware lists /privacy as public).
-export const metadata = { title: 'Privacy Policy · Rummy10', description: 'What Rummy10 collects, why, who can see it, and how to delete your account.' };
+export const metadata = { title: 'Privacy Policy · PicknPlay', description: 'What PicknPlay collects, why, who can see it, and how to delete your account.' };
 
 const UPDATED = '15 November 2026';
 
@@ -12,9 +12,9 @@ export default function PrivacyPage() {
 			<NavBar title="Privacy" back="/" backLabel="Back" />
 			<main className="policy">
 				<h1 className="large-title">Privacy Policy</h1>
-				<p className="subtitle">Rummy10 · last updated {UPDATED}</p>
+				<p className="subtitle">PicknPlay · last updated {UPDATED}</p>
 
-				<p>Rummy10 is a card game you play with friends and Virtual Friends. This page explains, in plain words, what the game keeps about you, why, who can see it, and how to delete it. We don’t sell your data, we don’t show ads, and we don’t use tracking or analytics tools.</p>
+				<p>PicknPlay is a card game you play with friends and Virtual Friends. This page explains, in plain words, what the game keeps about you, why, who can see it, and how to delete it. We don’t sell your data, we don’t show ads, and we don’t use tracking or analytics tools.</p>
 
 				<h2>What we collect</h2>
 				<h3>Your account</h3>
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
 				</ul>
 				<h3>Your games</h3>
 				<ul>
-					<li><b>The games you play</b>: your seat, cards, moves, phases, scores, final places and leaderboard points, monthly champion titles, and the reason given when someone leaves, is removed, or a game is ended.</li>
+					<li><b>The games you play</b>: your seat, cards, moves, hand points, final places and leaderboard points, monthly champion titles, and the reason given when someone leaves, is removed, or a game is ended.</li>
 					<li><b>Table chat and emoji reactions</b> you send. Everyone at that table can read them.</li>
 				</ul>
 				<h3>Friends</h3>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
 				<h3>Only if you turn them on</h3>
 				<ul>
 					<li><b>Phone alerts</b>: your browser gives us a delivery address from its push service (Google, Apple or Mozilla, depending on your phone). Alerts carry short text such as “Your turn in game 1095.” Turn them off any time in Account.</li>
-					<li><b>Voice chat</b>: when an admin has switched voice on and <i>you</i> tap the microphone, your voice is sent live to the players at your table through LiveKit, our voice service. Rummy10 does not record or store voice. You can mute or leave at any time.</li>
+					<li><b>Voice chat</b>: when an admin has switched voice on and <i>you</i> tap the microphone, your voice is sent live to the players at your table through LiveKit, our voice service. PicknPlay does not record or store voice. You can mute or leave at any time.</li>
 				</ul>
 				<h3>When something goes wrong</h3>
 				<ul>
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
 					<li><b>LiveKit</b> — carries voice chat while it’s happening, if you use it.</li>
 					<li><b>Your phone’s push service</b> — delivers alerts, if you turn them on.</li>
 				</ul>
-				<p>Everything travels over encrypted connections (HTTPS). The database can only be reached by the Rummy10 server, not directly from browsers.</p>
+				<p>Everything travels over encrypted connections (HTTPS). The database can only be reached by the PicknPlay server, not directly from browsers.</p>
 
 				<h2>How long we keep it</h2>
 				<p>As long as your account exists. Finished games stay in the game history so everyone’s scores remain correct. Games nobody has touched for 24 hours are closed, and old invites are cleared after 7 days.</p>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
 				<p>If we change this policy, we’ll update the date at the top. Big changes will be shown in the app.</p>
 
 				<h2>Questions</h2>
-				<p>Ask a Rummy10 admin, or contact the person who invited you to Rummy10.</p>
+				<p>Ask a PicknPlay admin, or contact the person who invited you to PicknPlay.</p>
 
 				<p className="hint" style={{ marginTop: 24 }}><Link href="/how-to-play" style={{ color: 'var(--gold)' }}>How to Play</Link></p>
 			</main>

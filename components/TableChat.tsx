@@ -31,7 +31,7 @@ export default function TableChat({ gameId, me, people, chatLast, onEmoji }: { g
 	const fetching = useRef(false);
 	const listRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
-	const KEY = `rummy10.chatRead.${gameId}`;
+	const KEY = `picknplay.chatRead.${gameId}`;
 
 	const fetchNew = useCallback(async () => {
 		if (fetching.current) return;

@@ -14,13 +14,13 @@ interface Stats {
 	headToHead: { id: number; username: string; photo: string; games: number; wins: number; losses: number }[];
 }
 interface HistoryGame {
-	id: number; status: 'finished' | 'ended'; at: string | null; round: number; practice: boolean;
+	id: number; status: 'finished' | 'ended'; at: string | null; variant: string; moves: number; how: string | null; practice: boolean;
 	endReason: string | null; endedBy: string | null; myRank: number | null; myLeft: string | null;
-	players: { id: number; username: string; photo: string; isBot: boolean; rank: number | null; phase: number; score: number; left: string | null }[];
+	players: { id: number; username: string; photo: string; isBot: boolean; rank: number | null; points: number; cut: boolean; left: string | null }[];
 	log: string[];
 }
 type Tab = 'board' | 'stats' | 'recent';
-const TAB_KEY = 'rummy10.scoresTab';
+const TAB_KEY = 'picknplay.scoresTab';
 const ordinal = (n: number) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
 const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }).format(new Date(iso)) : '');
 
@@ -183,12 +183,12 @@ function Recent() {
 						{isOpen && (
 							<div className="history-detail">
 								{g.status === 'ended' && <p className="footnote">Ended{g.endedBy ? ` by ${g.endedBy}` : ''} · {g.endReason || 'no reason given'}. No leaderboard points.</p>}
-								<table className="standings"><thead><tr><th>#</th><th>Player</th><th>Phase</th><th>Points</th></tr></thead><tbody>
+								<table className="standings"><thead><tr><th>#</th><th>Player</th><th>Hand</th></tr></thead><tbody>
 									{g.players.map(p => (
 										<tr key={p.id}>
 											<td>{p.rank ?? '–'}</td>
-											<td>{p.username}{p.isBot ? ' 🤖' : ''}{p.left ? <span className="left-note"> · left ({p.left})</span> : null}</td>
-											<td>{p.phase}</td><td>{p.score}</td>
+											<td>{p.username}{p.isBot ? ' 🤖' : ''}{p.cut ? ' ✂️' : ''}{p.left ? <span className="left-note"> · left ({p.left})</span> : null}</td>
+											<td>{p.points} pts</td>
 										</tr>
 									))}
 								</tbody></table>
@@ -196,7 +196,7 @@ function Recent() {
 									<div className="section-title" style={{ marginTop: 10 }}>Last moves</div>
 									<ul className="log">{g.log.map((l, i) => <li key={i}>{l}</li>)}</ul>
 								</>}
-								<p className="hint">Round {g.round}</p>
+								<p className="hint">{g.variant === 'super' ? 'PicknPlay Super' : 'PicknPlay Classic'} · {g.moves} cards played{g.how === 'cut' ? ' · ended by a cut' : g.how === 'out' ? ' · won by going out' : ''}</p>
 							</div>
 						)}
 					</div>

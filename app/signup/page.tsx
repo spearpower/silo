@@ -44,7 +44,7 @@ export default function SignUpPage() {
 						<div className="field"><label htmlFor="repassword">Confirm password</label>
 							<input name="repassword" id="repassword" type="password" placeholder="Type it again" autoComplete="new-password" required /></div>
 					</div>
-					<p className="legal" style={{ textAlign: 'left', marginTop: 14 }}>By creating an account you agree to how Rummy10 handles your data, as set out in the <Link href="/privacy">Privacy Policy</Link>.</p>
+					<p className="legal" style={{ textAlign: 'left', marginTop: 14 }}>By creating an account you agree to how PicknPlay handles your data, as set out in the <Link href="/privacy">Privacy Policy</Link>.</p>
 					<div style={{ marginTop: 14 }}>
 						<button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create Account'}</button>
 					</div>

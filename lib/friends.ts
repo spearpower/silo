@@ -70,7 +70,7 @@ export async function requestFriend(user: Session, otherId: number): Promise<'se
 	await sql`
 		insert into friendships (requester_id, addressee_id) values (${user.id}, ${otherId})
 		on conflict do nothing`;
-	await notifyUsers([otherId], { title: 'Friend request', body: `${user.username} wants to be friends on Rummy10`, url: '/friends', tag: `friend-${user.id}` });
+	await notifyUsers([otherId], { title: 'Friend request', body: `${user.username} wants to be friends on PicknPlay`, url: '/friends', tag: `friend-${user.id}` });
 	return 'sent';
 }
 
@@ -109,7 +109,7 @@ export async function inviteFriends(user: Session, gameId: number, toIds: number
 		await sql`insert into game_invites (game_id, from_id, to_id) values (${gameId}, ${user.id}, ${id})
 			on conflict (game_id, to_id) do update set status = 'sent', from_id = excluded.from_id, created_at = now()`;
 	}
-	await notifyUsers(to, { title: `${user.username} invited you to play`, body: `Join table ${gameId} on Rummy10`, url: '/', tag: `invite-${gameId}` });
+	await notifyUsers(to, { title: `${user.username} invited you to play`, body: `Join table ${gameId} on PicknPlay`, url: '/', tag: `invite-${gameId}` });
 	return to.length;
 }
 

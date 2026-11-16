@@ -1,7 +1,7 @@
 // Signed session cookie (JWT, HS256). Works in middleware (edge) and route handlers.
 import { SignJWT, jwtVerify } from 'jose';
 
-export const COOKIE = 'sofi10_session';
+export const COOKIE = 'picknplay_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 export interface Session { id: number; username: string; photo: string; role: 'player' | 'admin' | 'superadmin'; mustChange?: boolean }

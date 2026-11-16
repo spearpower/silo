@@ -26,7 +26,7 @@ export async function api<T = unknown>(path: string, body?: unknown): Promise<T>
 
 export interface LobbyPlayer { id: number; seat: number; username: string; photo: string; online: boolean; isBot?: boolean; left?: boolean }
 export interface GameData {
-	id: number; me: number; edition?: number; status: 'lobby' | 'playing' | 'finished' | 'abandoned' | 'ended'; hostId: number; isMember: boolean;
+	id: number; me: number; variant: 'classic' | 'super'; status: 'lobby' | 'playing' | 'finished' | 'abandoned' | 'ended'; hostId: number; isMember: boolean;
 	pin: string | null; private: boolean; timerSec: number; version: number; deadline: string | null;
 	serverNow: string; nextGameId: number | null; players: LobbyPlayer[]; view: GameView | null; watch?: GameView | null; practice?: boolean; chatLast?: number;
 	canManage?: boolean; superAdmin?: boolean;
@@ -96,5 +96,5 @@ export function useGame(id: number) {
 }
 
 export { avatarUrl as avatar } from './avatars';
-export const cardSrc = (code: string) => `/cards/${code.slice(1)}.svg`;
+export { cardImage as cardSrc, CARD_BACK } from './card-codes';
 export function haptic(ms: number | number[] = 12) { try { navigator.vibrate?.(ms); } catch { /* not supported (iPhone) */ } }

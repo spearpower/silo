@@ -29,7 +29,7 @@ export default function SignInPage() {
 			<main>
 				<div className="brand">
 					<img src="/icons/icon-192.png" alt="" />
-					<h1 className="large-title">Rummy10</h1>
+					<h1 className="large-title">PicknPlay</h1>
 					<p className="subtitle center" style={{ margin: 0 }}>Sign in to play with your friends.</p>
 				</div>
 				<form onSubmit={submit} noValidate>
@@ -46,7 +46,7 @@ export default function SignInPage() {
 					<div style={{ marginTop: 20 }}>
 						<button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Signing In…' : 'Sign In'}</button>
 					</div>
-					{deleted && <div className="ok-banner" role="status">Your account has been deleted. Thanks for playing Rummy10.</div>}
+					{deleted && <div className="ok-banner" role="status">Your account has been deleted. Thanks for playing PicknPlay.</div>}
 					<ErrorBanner>{error}</ErrorBanner>
 					<details className="forgot">
 						<summary>Forgot your password?</summary>

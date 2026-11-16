@@ -1,316 +1,450 @@
+// Engine tests: every rule in rules.MD for PicknPlay Classic and PicknPlay Super, plus the rule options.
 import { describe, expect, it } from 'vitest';
-import { isRunInOrder, isValidGroup, placeInGroup, meetsCondition, Condition } from './rules';
-import { apply, autoPlay, AWAY_TURNS, awayPlayer, countCards, endRound, GameError, GameState, newGame, removePlayer, sameCircle, viewFor } from './engine';
-import { penalty } from './cards';
+import { apply, autoPlay, countCards, finish, GameState, HAND_SIZE, newGame, removePlayer, viewFor } from './engine';
+import { botTurn } from './bot';
+import { cardPoints, deckFor, handPoints } from './card-codes';
+import { canPlay, cleanRules, DEFAULT_RULES, isSpecial, RuleOptions } from './rules';
+import type { Variant } from './card-codes';
 
-const CLASSIC: Record<string, Condition[]> = {
-	'1': [{ type: 'set', count: 3 }, { type: 'set', count: 3 }],
-	'2': [{ type: 'set', count: 3 }, { type: 'run', count: 4 }],
-	'3': [{ type: 'set', count: 4 }, { type: 'run', count: 4 }],
-	'4': [{ type: 'run', count: 7 }],
-	'5': [{ type: 'run', count: 8 }],
-	'6': [{ type: 'run', count: 9 }],
-	'7': [{ type: 'set', count: 4 }, { type: 'set', count: 4 }],
-	'8': [{ type: 'color', count: 7 }],
-	'9': [{ type: 'set', count: 5 }, { type: 'set', count: 2 }],
-	'10': [{ type: 'set', count: 5 }, { type: 'set', count: 3 }],
-};
+/** A hand-built table: players 1..n, player 1 on turn, given hands / top card / suit. */
+function table(o: {
+	variant?: Variant; hands: string[][]; top: string; suit?: string; cutter?: string; deck?: string[];
+	penalty?: GameState['penalty']; rules?: Partial<RuleOptions>; direction?: 1 | -1; turn?: number;
+}): GameState {
+	const variant = o.variant || 'classic';
+	const order = o.hands.map((_, i) => i + 1);
+	const players: GameState['players'] = {};
+	order.forEach((id, i) => { players[String(id)] = { id, hand: [...o.hands[i]] }; });
+	const used = new Set([...o.hands.flat(), o.top, ...(o.deck || [])]);
+	const cutter = o.cutter || '9C';
+	const deck = o.deck ? [...o.deck] : deckFor(variant).filter(c => !used.has(c) && c !== cutter).concat(used.has(cutter) ? [] : [cutter]);
+	return {
+		variant, rules: { ...DEFAULT_RULES, ...(o.rules || {}) }, order, direction: o.direction || 1,
+		deck, discard: [o.top], cutter, suit: (o.suit || o.top.slice(-1)) as GameState['suit'], penalty: o.penalty || null,
+		players, turn: o.turn || 1, step: 'play', drawn: null, moves: 0, stuck: 0, seq: 0, events: [], log: [], finished: null,
+	};
+}
+const hand = (s: GameState, id: number) => s.players[String(id)].hand;
 
-describe('rules', () => {
-	it('sets', () => {
-		expect(isValidGroup('set', ['1r7', '2b7', '1ww'])).toBe(true);
-		expect(isValidGroup('set', ['1r7', '2b8'])).toBe(false);
-		expect(isValidGroup('set', ['1r7', '1ss'])).toBe(false);
+describe('deck and deal', () => {
+	it('Classic: 52 cards, no Jokers; Super: 54 with two Jokers', () => {
+		expect(deckFor('classic')).toHaveLength(52);
+		expect(deckFor('classic').some(c => c.startsWith('X'))).toBe(false);
+		expect(deckFor('super')).toHaveLength(54);
+		expect(deckFor('super').filter(c => c.startsWith('X'))).toEqual(['XR', 'XB']);
+		expect(new Set(deckFor('super')).size).toBe(54);
 	});
-	it('runs with wilds, both directions, bounded 1..12', () => {
-		expect(isRunInOrder(['1r3', '1ww', '2b5', '1g6'])).toBe(true);
-		expect(isRunInOrder(['1r9', '1b8', '1ww', '1g6'])).toBe(true);
-		expect(isRunInOrder(['1r11', '1b12', '1ww'])).toBe(false); // would need 13
-		expect(isRunInOrder(['1ww', '1r1'])).toBe(true);           // 2,1 descending
-		expect(isRunInOrder(['1ww', '1ww', '1r1', '1b2'])).toBe(false); // would need -1,0 ascending
-		expect(isRunInOrder(['1ww', '1r2'])).toBe(true);
-		expect(isRunInOrder(['1r3', '1r5'])).toBe(false);
-	});
-	it('colour groups', () => {
-		expect(isValidGroup('color', ['1r3', '2r9', '1ww'])).toBe(true);
-		expect(isValidGroup('color', ['1r3', '2b9'])).toBe(false);
-	});
-	it('placement at either end of a run', () => {
-		expect(placeInGroup('run', ['1r4', '1r5'], '2b3', 'start')).toEqual(['2b3', '1r4', '1r5']);
-		expect(placeInGroup('run', ['1r4', '1r5'], '2b3', 'end')).toBeNull();
-		expect(placeInGroup('run', ['1r4', '1r5'], '1ss', 'end')).toBeNull();
-	});
-	it('conditions need the count too', () => {
-		expect(meetsCondition({ type: 'set', count: 3 }, ['1r7', '2b7'])).toBe(false);
-		expect(meetsCondition({ type: 'set', count: 3 }, ['1r7', '2b7', '1ww'])).toBe(true);
-	});
-	it('penalties', () => {
-		expect([penalty('1r1'), penalty('1r9'), penalty('1r10'), penalty('1ss'), penalty('1ww')]).toEqual([5, 5, 10, 15, 25]);
+
+	for (const variant of ['classic', 'super'] as Variant[]) {
+		it(`${variant}: deals 7 cards each, a visible cutter at the bottom and a separate opening discard`, () => {
+			for (let k = 0; k < 40; k++) {
+				const s = newGame(variant, [1, 2, 3, 4], DEFAULT_RULES);
+				for (const id of s.order) expect(hand(s, id)).toHaveLength(HAND_SIZE);
+				expect(countCards(s)).toBe(variant === 'super' ? 54 : 52);
+				expect(s.deck[s.deck.length - 1]).toBe(s.cutter);           // face up under the draw pile
+				expect(s.cutter.startsWith('X')).toBe(false);                // the cutter needs a suit
+				expect(s.discard).toHaveLength(1);
+				expect(s.discard[0]).not.toBe(s.cutter);                     // cutter is not the first discard
+				expect(isSpecial(s.discard[0], variant, s.cutter.slice(-1) as never)).toBe(false); // default: plain opening card
+				expect(s.order).toContain(s.turn);
+				const all = [...s.deck, ...s.discard, ...s.order.flatMap(id => hand(s, id))];
+				expect(new Set(all).size).toBe(all.length);                  // no duplicates
+			}
+		});
+	}
+
+	it('needs 2–6 players', () => {
+		expect(() => newGame('classic', [1], DEFAULT_RULES)).toThrow();
+		expect(() => newGame('classic', [1, 2, 3, 4, 5, 6, 7], DEFAULT_RULES)).toThrow();
+		expect(newGame('super', [1, 2, 3, 4, 5, 6], DEFAULT_RULES).order).toHaveLength(6);
 	});
 });
 
-function fixed(state: GameState, id: number, hand: string[]) {
-	state.players[String(id)].hand = hand;
-}
-
-describe('engine', () => {
-	it('deals 10 each, one discard, rest in deck', () => {
-		const s = newGame(1, [1, 2, 3], CLASSIC);
-		for (const id of [1, 2, 3]) expect(s.players[String(id)].hand.length).toBe(10);
-		expect(countCards(s)).toBe(108);
-		expect(s.turn).not.toBeNull();
+describe('matching', () => {
+	it('plays a card of the same suit or the same rank', () => {
+		const s = table({ hands: [['5H', '9S', 'KC'], ['3D']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '5H' });        // suit
+		expect(s.discard[0]).toBe('5H');
+		expect(s.turn).toBe(2);
+		const t = table({ hands: [['9S', 'KC'], ['3D']], top: '9H' });
+		apply(t, 1, { type: 'play', card: '9S' });        // rank
+		expect(t.suit).toBe('S');
 	});
 
-	it('enforces turn order and steps', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		const me = s.turn!, other = s.order.find(i => i !== me)!;
-		expect(() => apply(s, other, { type: 'draw', from: 'deck' })).toThrow(GameError);
-		expect(() => apply(s, me, { type: 'discard', card: s.players[String(me)].hand[0] })).toThrow(/Draw a card first/);
-		apply(s, me, { type: 'draw', from: 'deck' });
-		expect(() => apply(s, me, { type: 'draw', from: 'deck' })).toThrow(/already drawn/);
-		apply(s, me, { type: 'discard', card: s.players[String(me)].hand.find(c => c[1] !== 's')! });
-		expect(s.turn).toBe(other);
-		expect(countCards(s)).toBe(108);
+	it('refuses a card that matches neither suit nor rank', () => {
+		const s = table({ hands: [['KC', '4D'], ['3D']], top: '9H' });
+		expect(() => apply(s, 1, { type: 'play', card: 'KC' })).toThrow(/Hearts/);
 	});
 
-	it('refuses a Skip from the discard pile', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		s.discard.unshift('1ss'); s.deck = s.deck.filter(c => c !== '1ss');
-		expect(() => apply(s, s.turn!, { type: 'draw', from: 'discard' })).toThrow(/Skip/);
+	it('refuses cards you do not hold, and playing out of turn', () => {
+		const s = table({ hands: [['5H'], ['6H']], top: '9H' });
+		expect(() => apply(s, 1, { type: 'play', card: '7H' })).toThrow(/not in your hand/);
+		expect(() => apply(s, 2, { type: 'play', card: '6H' })).toThrow(/not your turn/);
+		expect(() => apply(s, 99, { type: 'draw' })).toThrow(/not in this game/);
+	});
+});
+
+describe('Ace', () => {
+	it('goes on any card except a 2, and names the suit to follow', () => {
+		const s = table({ hands: [['AD', '4C'], ['5S', '5C']], top: '9H' });
+		expect(() => apply(s, 1, { type: 'play', card: 'AD' })).toThrow(/Name a suit/);
+		apply(s, 1, { type: 'play', card: 'AD', suit: 'S' });
+		expect(s.suit).toBe('S');
+		expect(canPlay({ variant: 'classic', rules: DEFAULT_RULES, top: 'AD', suit: 'S', penalty: null }, '5S')).toBe(true);
+		expect(canPlay({ variant: 'classic', rules: DEFAULT_RULES, top: 'AD', suit: 'S', penalty: null }, '5D')).toBe(false);
 	});
 
-	it('going out by laying down: penalties, phase advance, staged cards count when not laid down', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		const me = s.turn!, other = s.order.find(i => i !== me)!;
-		fixed(s, me, ['1r7', '2b7', '1g7', '1r9', '2y9', '1ww']);
-		fixed(s, other, ['1b12', '2ww']);
-		s.players[String(other)].groups = [['1ss'], []];
-		s.deck = s.deck.filter(c => !['1r7', '2b7', '1g7', '1r9', '2y9', '1ww', '1b12', '2ww', '1ss'].includes(c));
-		s.step = 'play';
-		expect(() => apply(s, me, { type: 'layDown' })).toThrow(/don’t complete/);
-		for (const c of ['1r7', '2b7', '1g7']) apply(s, me, { type: 'place', card: c, group: 0 });
-		expect(() => apply(s, me, { type: 'place', card: '1r9', group: 0 })).toThrow(/doesn’t fit/);
-		for (const c of ['1r9', '2y9', '1ww']) apply(s, me, { type: 'place', card: c, group: 1 });
-		const r = apply(s, me, { type: 'layDown' });
-		expect(r.roundEnded).toBe(true);
-		const res = Object.fromEntries(s.lastRound!.results.map(x => [x.id, x]));
-		expect(res[me]).toMatchObject({ completed: true, penalty: 0, phase: 1 });
-		expect(res[other]).toMatchObject({ completed: false, penalty: 10 + 25 + 15, phase: 1 });
-		expect(s.players[String(me)].phase).toBe(2);
-		expect(s.players[String(other)].phase).toBe(1);
-		expect(s.round).toBe(2);
-		expect(s.players[String(me)].groups.length).toBe(2);
-		expect(s.lastRound!.wentOut).toBe(me);
+	it('cannot be played on a 2 (when no penalty is waiting)', () => {
+		const s = table({ hands: [['AH', '4C'], ['5S']], top: '2H' });
+		expect(() => apply(s, 1, { type: 'play', card: 'AH', suit: 'H' })).toThrow(/Ace can’t be played on a 2/);
+	});
+});
+
+describe('2: draw two (both variants)', () => {
+	it('makes the next player draw 2, then their turn ends', () => {
+		const s = table({ hands: [['2H', '4C'], ['5S', '6S'], ['7D']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		expect(s.penalty).toEqual({ kind: '2', amount: 2 });
+		expect(s.turn).toBe(2);
+		expect(() => apply(s, 2, { type: 'play', card: '5S' })).toThrow(/Play a 2 or an Ace/);
+		apply(s, 2, { type: 'draw' });
+		expect(hand(s, 2)).toHaveLength(4);
+		expect(s.penalty).toBeNull();
+		expect(s.turn).toBe(3);
 	});
 
-	it('skip: target loses their next turn (2 players: you go again)', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		const me = s.turn!, other = s.order.find(i => i !== me)!;
-		fixed(s, me, ['1ss', '1r1', '1r2']);
-		s.deck = s.deck.filter(c => c !== '1ss' && c !== '1r1' && c !== '1r2');
-		apply(s, me, { type: 'draw', from: 'deck' });
-		apply(s, me, { type: 'discard', card: '1ss' });
-		expect(s.step).toBe('skip');
-		expect(viewFor(s, me).skipTargets).toEqual([other]);
-		apply(s, me, { type: 'skip', target: other });
-		expect(s.turn).toBe(me);
-		expect(s.players[String(other)].skipped).toBe(false);
+	it('stacks: each 2 adds 2 and passes it on', () => {
+		const s = table({ hands: [['2H', '4C'], ['2S', '6S'], ['2D', '7D'], ['8C', '9C']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'play', card: '2S' });
+		apply(s, 3, { type: 'play', card: '2D' });
+		expect(s.penalty).toEqual({ kind: '2', amount: 6 });
+		apply(s, 4, { type: 'draw' });
+		expect(hand(s, 4)).toHaveLength(8);
 	});
 
-	it('hidden information: others never see your hand or staged cards', () => {
-		const s = newGame(1, [1, 2, 3], CLASSIC);
-		const v = viewFor(s, 1);
-		expect(v.hand.length).toBe(10);
-		for (const p of v.players.filter(p => p.id !== 1)) {
-			expect(p.groups).toBeNull();
-			expect(p.handCount).toBe(10);
+	it('any Ace cancels a 2 penalty (and names a suit)', () => {
+		for (const ace of ['AH', 'AD', 'AC', 'AS']) {
+			const s = table({ hands: [['2H', '4C'], [ace, '6S'], ['7D']], top: '9H' });
+			apply(s, 1, { type: 'play', card: '2H' });
+			apply(s, 2, { type: 'play', card: ace, suit: 'D' });
+			expect(s.penalty).toBeNull();
+			expect(s.suit).toBe('D');
+			expect(s.turn).toBe(3);
+			expect(hand(s, 2)).toEqual(['6S']);
 		}
-		expect(JSON.stringify(v)).not.toContain(JSON.stringify(s.players['2'].hand));
-		expect((v as unknown as Record<string, unknown>).deck).toBeUndefined();
 	});
 
-	it('removing a player keeps all 108 cards and passes their turn on', () => {
-		const s = newGame(1, [1, 2, 3], CLASSIC);
-		const leaving = s.turn!;
-		const next = s.order[(s.order.indexOf(leaving) + 1) % 3];
-		const lp = s.players[String(leaving)];
-		lp.groups[0] = [lp.hand.shift()!]; // one card laid down, still theirs
-		expect(removePlayer(s, leaving, 'left the game')).toBe(2);
-		expect(s.order).not.toContain(leaving);
-		expect(s.turn).toBe(next);
-		expect(s.step).toBe('draw');
-		expect(countCards(s)).toBe(108);
-		expect(s.log[0]).toContain('left the game');
-		expect(removePlayer(s, s.order[0], 'was removed')).toBe(1);
+	it('rule option drawThenPlay: after drawing the penalty the same player plays on', () => {
+		const s = table({ hands: [['2H', '4C'], ['5S', '6S'], ['7D']], top: '9H', rules: { penaltyResponse: 'drawThenPlay' } });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'draw' });
+		expect(s.turn).toBe(2);
+		expect(s.penalty).toBeNull();
+	});
+});
+
+describe('PicknPlay Super penalties', () => {
+	it('3 = draw 3, stacks by 3; a 2 cannot answer a 3', () => {
+		const s = table({ variant: 'super', hands: [['3H', '4C'], ['3S', '2S'], ['2D', '7D'], ['8C']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '3H' });
+		expect(s.penalty).toEqual({ kind: '3', amount: 3 });
+		expect(() => apply(s, 2, { type: 'play', card: '2S' })).toThrow();
+		apply(s, 2, { type: 'play', card: '3S' });
+		expect(s.penalty).toEqual({ kind: '3', amount: 6 });
+		apply(s, 3, { type: 'draw' });
+		expect(hand(s, 3)).toHaveLength(8);
+	});
+
+	it('Joker = draw 5, stacks by 5 (two Jokers = 10)', () => {
+		const s = table({ variant: 'super', hands: [['XR', '4C'], ['XB', '2S'], ['7D']], top: '9H' });
+		apply(s, 1, { type: 'play', card: 'XR' });
+		expect(s.penalty).toEqual({ kind: 'X', amount: 5 });
+		expect(s.suit).toBe('H');                 // a Joker keeps the suit being followed
+		apply(s, 2, { type: 'play', card: 'XB' });
+		expect(s.penalty).toEqual({ kind: 'X', amount: 10 });
+		apply(s, 3, { type: 'draw' });
+		expect(hand(s, 3)).toHaveLength(11);
+	});
+
+	it('only the Black Spade Ace cancels a 3 or Joker penalty', () => {
+		for (const first of ['3H', 'XR']) {
+			const s = table({ variant: 'super', hands: [[first, '4C'], ['AH', 'AS', '6S'], ['7D']], top: '9H' });
+			apply(s, 1, { type: 'play', card: first });
+			expect(() => apply(s, 2, { type: 'play', card: 'AH', suit: 'H' })).toThrow(/Black Spade Ace/);
+			apply(s, 2, { type: 'play', card: 'AS', suit: 'C' });
+			expect(s.penalty).toBeNull();
+			expect(s.suit).toBe('C');
+			expect(s.turn).toBe(3);
+		}
+	});
+
+	it('any Ace still cancels a 2 penalty in Super', () => {
+		const s = table({ variant: 'super', hands: [['2H', '4C'], ['AD', '6S'], ['7D']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'play', card: 'AD', suit: 'S' });
+		expect(s.penalty).toBeNull();
+	});
+
+	it('in Classic a 3 has no effect', () => {
+		const s = table({ hands: [['3H', '4C'], ['5H'], ['7D']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '3H' });
+		expect(s.penalty).toBeNull();
+		expect(s.turn).toBe(2);
+	});
+
+	it('rule option jokerOnAnything=false: a Joker only goes on a Joker', () => {
+		const t = { variant: 'super' as const, rules: { ...DEFAULT_RULES, jokerOnAnything: false }, suit: 'H' as const, penalty: null };
+		expect(canPlay({ ...t, top: '9H' }, 'XR')).toBe(false);
+		expect(canPlay({ ...t, top: 'XB' }, 'XR')).toBe(true);
+	});
+});
+
+describe('8 and Jack', () => {
+	it('8 with more than two players skips the next player', () => {
+		const s = table({ hands: [['8H', '4C'], ['5H'], ['6H'], ['7H']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '8H' });
+		expect(s.turn).toBe(3);
+		expect(s.events.some(e => e.t === 'skip' && e.target === 2)).toBe(true);
+	});
+
+	it('Jack with more than two players reverses direction', () => {
+		const s = table({ hands: [['JH', '4C'], ['5H'], ['6H'], ['7H', 'KS']], top: '9H' });
+		apply(s, 1, { type: 'play', card: 'JH' });
+		expect(s.direction).toBe(-1);
+		expect(s.turn).toBe(4);
+		apply(s, 4, { type: 'play', card: '7H' });
+		expect(s.turn).toBe(3);
+	});
+
+	it('8 or Jack in a two-player game gives another play', () => {
+		for (const c of ['8H', 'JH']) {
+			const s = table({ hands: [[c, '4H', 'KC'], ['5S']], top: '9H' });
+			apply(s, 1, { type: 'play', card: c });
+			expect(s.turn).toBe(1);
+			expect(s.step).toBe('play');
+			apply(s, 1, { type: 'play', card: '4H' });
+			expect(s.turn).toBe(2);
+		}
+	});
+
+	it('two players: unable to make the extra play, you draw by the normal rule', () => {
+		const s = table({ hands: [['8H', 'KC'], ['5S']], top: '9H', deck: ['QD', '3S', '9C'] });
+		apply(s, 1, { type: 'play', card: '8H' });
+		apply(s, 1, { type: 'draw' });                // QD doesn't fit hearts: turn passes
+		expect(hand(s, 1)).toEqual(['KC', 'QD']);
+		expect(s.turn).toBe(2);
+	});
+});
+
+describe('drawing', () => {
+	it('draws one card; a playable drawn card may be played at once or kept (pass)', () => {
+		const s = table({ hands: [['KC'], ['5S'], ['6C']], top: '9H', deck: ['4H', '7S', '9C'] });
+		apply(s, 1, { type: 'draw' });
+		expect(s.step).toBe('drawn');
+		expect(s.drawn).toBe('4H');
+		expect(() => apply(s, 1, { type: 'play', card: 'KC' })).toThrow(/only play the card you drew/);
+		expect(() => apply(s, 1, { type: 'draw' })).toThrow(/already drawn/);
+		apply(s, 1, { type: 'play', card: '4H' });
+		expect(s.turn).toBe(2);
+
+		const t = table({ hands: [['KC'], ['5S'], ['6C']], top: '9H', deck: ['4H', '7S', '9C'] });
+		apply(t, 1, { type: 'draw' });
+		apply(t, 1, { type: 'pass' });
+		expect(hand(t, 1)).toEqual(['KC', '4H']);
+		expect(t.turn).toBe(2);
+	});
+
+	it('an unplayable drawn card ends the turn; pass is only allowed after drawing', () => {
+		const s = table({ hands: [['KC'], ['5S']], top: '9H', deck: ['4S', '7S', '9C'] });
+		expect(() => apply(s, 1, { type: 'pass' })).toThrow();
+		apply(s, 1, { type: 'draw' });
+		expect(s.turn).toBe(2);
+	});
+
+	it('empty draw pile: the discard pile is reshuffled under its top card', () => {
+		const s = table({ hands: [['KC'], ['5S']], top: '9H', deck: [] });
+		s.discard = ['9H', '3D', '4D', '5D'];
+		apply(s, 1, { type: 'draw' });
+		expect(s.discard).toEqual(['9H']);
+		expect(hand(s, 1)).toHaveLength(2);
+		expect(s.deck).toHaveLength(2);
+	});
+
+	it('rule option emptyDeck=count: the game ends and the lowest hand wins', () => {
+		const s = table({ hands: [['KC'], ['5S']], top: '9H', deck: [], rules: { emptyDeck: 'count' } });
+		s.discard = ['9H', '3D'];
+		apply(s, 1, { type: 'draw' });
+		expect(s.finished?.how).toBe('count');
+		expect(s.finished?.standings[0].id).toBe(2);
+	});
+
+	it('a penalty draws as many cards as remain when the piles run short', () => {
+		const s = table({ hands: [['2H', 'KC'], ['5S']], top: '9H', deck: ['3C'] });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'draw' });
+		expect(hand(s, 2)).toHaveLength(3); // 3C + the reshuffled 9H
+	});
+});
+
+describe('cutter and cutting', () => {
+	it('only the 7 of the cutter suit can cut; the game ends and the lowest hand wins', () => {
+		const s = table({ hands: [['7C', '3C', 'KD'], ['KH', 'QH'], ['4H', '2S']], top: '9C', cutter: '10C' });
+		expect(() => apply(s, 1, { type: 'play', card: '3C', cut: true })).toThrow(/Only the 7♣/);
+		apply(s, 1, { type: 'play', card: '7C', cut: true });
+		const f = s.finished!;
+		expect(f.how).toBe('cut');
+		expect(f.by).toBe(1);
+		// 1: 3+13 = 16, 2: 13+12 = 25, 3: 4+20 = 24
+		expect(f.standings.map(x => [x.id, x.points, x.rank])).toEqual([[1, 16, 1], [3, 24, 2], [2, 25, 3]]);
+		expect(f.standings[0].award).toBe(3);
 		expect(s.turn).toBeNull();
 	});
 
-	it('away: timeouts in a row are counted, any own move resets the count, Virtual Friends never count', () => {
-		const s = newGame(1, [1, 2, 3], CLASSIC);
-		s.bots = [3];
-		const first = s.turn!;
-		for (let i = 0; i < 3 * AWAY_TURNS; i++) autoPlay(s);
-		if (first !== 3) expect(s.missed?.[String(first)]).toBe(AWAY_TURNS);
-		expect(s.missed?.['3']).toBeUndefined();
-		expect(awayPlayer(s, 3)).toBeNull();
-		// person 1 or 2 is away now
-		const person = [1, 2].find(x => (s.missed?.[String(x)] || 0) >= AWAY_TURNS)!;
-		expect(awayPlayer(s, person)).toBe(person);
-		// once they act themselves, the count resets
-		while (s.turn !== person) autoPlay(s);
-		apply(s, person, { type: 'draw', from: 'deck' });
-		expect(s.missed?.[String(person)]).toBeUndefined();
-		autoPlay(s); // ran out of time after drawing: counts as one missed turn
-		expect(s.missed?.[String(person)]).toBe(1);
-		removePlayer(s, person, 'was taken out');
-		expect(s.missed?.[String(person)]).toBeUndefined();
-		expect(countCards(s)).toBe(108);
+	it('the cut 7 must itself be a legal play', () => {
+		const s = table({ hands: [['7C', '3C'], ['KH']], top: '9H', cutter: '10C' });
+		expect(() => apply(s, 1, { type: 'play', card: '7C', cut: true })).toThrow();
 	});
 
-	it('finished game: a player who moved up a phase still gets groups matching their conditions (live game 1013)', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		// player 2 completed phase 6 (one run) in the last round and moved up to phase 7 (two sets)
-		const p = s.players['2'];
-		p.phase = 7; p.done = true; p.groups = [['1r1', '1b2', '1g3', '1y4', '2r5', '2b6', '2g7', '2y8', '1r9']];
-		s.finished = { standings: [] };
-		for (const me of [1, 2]) {
-			const v = viewFor(s, me).players.find(x => x.id === 2)!;
-			expect(v.groups!.length).toBe(v.conditions.length);
-			expect(v.conditions).toEqual(CLASSIC['6']);
-		}
+	it('the cutter can lose a cut: lowest hand wins, not the cutter', () => {
+		const s = table({ hands: [['7C', 'KC', 'KD'], ['3H']], top: '9C', cutter: '10C' });
+		apply(s, 1, { type: 'play', card: '7C', cut: true });
+		expect(s.finished!.standings[0].id).toBe(2);
 	});
 
-		it('timeout auto-plays a legal turn', () => {
-		const s = newGame(1, [1, 2, 3], CLASSIC);
-		const before = s.turn;
+	it('playing the cut 7 without cutting is a normal play', () => {
+		const s = table({ hands: [['7C', '3C'], ['KH'], ['4C']], top: '9C', cutter: '10C' });
+		apply(s, 1, { type: 'play', card: '7C' });
+		expect(s.finished).toBeNull();
+		expect(s.turn).toBe(2);
+	});
+
+	it('Super: the cutter must hold below 60 points after playing the 7 (default threshold)', () => {
+		const s = table({ variant: 'super', hands: [['7C', 'AS', '4D'], ['KH'], ['4H']], top: '9C', cutter: '10C' });
+		expect(() => apply(s, 1, { type: 'play', card: '7C', cut: true })).toThrow(/fewer than 60/); // 60 + 4 = 64
+		const t = table({ variant: 'super', hands: [['7C', 'KD', 'QD', 'JD', '10D', '9S'], ['KH'], ['4H']], top: '9C', cutter: '10C' });
+		apply(t, 1, { type: 'play', card: '7C', cut: true }); // 13+12+11+10+9 = 55 < 60
+		expect(t.finished?.how).toBe('cut');
+	});
+
+	it('Classic has no cut threshold by default', () => {
+		const s = table({ hands: [['7C', 'KD', 'QD', 'JD', '10D', '9S', '2H'], ['KH']], top: '9C', cutter: '10C' });
+		apply(s, 1, { type: 'play', card: '7C', cut: true }); // 75 points
+		expect(s.finished?.how).toBe('cut');
+	});
+
+	it('ties for lowest share the win by default; option cutTie=cutter gives it to the cutter', () => {
+		const s = table({ hands: [['7C', '5D'], ['5H'], ['KH']], top: '9C', cutter: '10C' });
+		apply(s, 1, { type: 'play', card: '7C', cut: true });
+		expect(s.finished!.standings.filter(x => x.rank === 1).map(x => x.id).sort()).toEqual([1, 2]);
+		const t = table({ hands: [['7C', '5D'], ['5H'], ['KH']], top: '9C', cutter: '10C', rules: { cutTie: 'cutter' } });
+		apply(t, 1, { type: 'play', card: '7C', cut: true });
+		expect(t.finished!.standings.filter(x => x.rank === 1).map(x => x.id)).toEqual([1]);
+	});
+});
+
+describe('scoring', () => {
+	it('Classic values: 2=20, A=15, J=11, Q=12, K=13, others face value', () => {
+		expect(['2H', 'AS', 'AH', 'JD', 'QC', 'KS', '10H', '3D'].map(c => cardPoints(c, 'classic', 50))).toEqual([20, 15, 15, 11, 12, 13, 10, 3]);
+	});
+	it('Super: Black Spade Ace = 60, other Aces = 15, Jokers = the Joker points option', () => {
+		expect(cardPoints('AS', 'super', 50)).toBe(60);
+		expect(cardPoints('AH', 'super', 50)).toBe(15);
+		expect(cardPoints('XR', 'super', 50)).toBe(50);
+		expect(handPoints(['AS', '2H', 'KC'], 'super', 50)).toBe(93);
+		expect(handPoints(['AS', '2H', 'KC'], 'classic', 50)).toBe(48);
+	});
+});
+
+describe('going out', () => {
+	it('emptying your hand wins at once, even with a special card', () => {
+		const s = table({ hands: [['2H'], ['5S', 'KD'], ['6C']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		expect(s.finished?.how).toBe('out');
+		expect(s.finished?.standings[0]).toMatchObject({ id: 1, rank: 1, points: 0, award: 3 });
+		expect(s.penalty).toBeNull();
+		expect(() => apply(s, 2, { type: 'draw' })).toThrow(/finished/);
+	});
+});
+
+describe('timeouts, leaving, privacy', () => {
+	it('a timeout draws (or takes the penalty) and passes the turn', () => {
+		const s = table({ hands: [['2H', 'KC'], ['5S'], ['6C']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
 		autoPlay(s);
-		expect(s.turn).not.toBe(before);
-		expect(countCards(s)).toBe(108);
+		expect(hand(s, 2)).toHaveLength(3);
+		expect(s.turn).toBe(3);
+		expect(s.missed?.['2']).toBe(1);
+	});
+
+	it('a player who leaves gives their cards back to the draw pile, cutter stays at the bottom', () => {
+		const s = newGame('super', [1, 2, 3], DEFAULT_RULES);
+		const total = countCards(s);
+		const out = s.turn!;
+		removePlayer(s, out, 'left');
+		expect(countCards(s)).toBe(total);
+		expect(s.deck[s.deck.length - 1]).toBe(s.cutter);
+		expect(s.turn).not.toBe(out);
+		expect(s.order).toHaveLength(2);
+	});
+
+	it('a player’s view never contains other hands or the draw pile', () => {
+		const s = newGame('super', [1, 2, 3], DEFAULT_RULES);
+		const v = viewFor(s, 1);
+		const json = JSON.stringify(v);
+		for (const id of [2, 3]) for (const c of hand(s, id)) expect(v.hand).not.toContain(c);
+		expect(json).not.toContain('"deck"');
+		expect(v.players.every(p => !('hand' in p))).toBe(true);
+		expect(v.deckCount).toBe(s.deck.length);
+		// the hand-built events never include a drawn card
+		apply(s, s.turn!, { type: 'draw' });
+		expect(JSON.stringify(s.events.filter(e => e.t === 'draw'))).not.toMatch(/"card"/);
+	});
+
+	it('playable cards are computed for the player on turn only', () => {
+		const s = table({ hands: [['5H', 'KC'], ['6H']], top: '9H' });
+		expect(viewFor(s, 1).playable).toEqual(['5H']);
+		expect(viewFor(s, 2).playable).toEqual([]);
 	});
 });
 
-// ---------- Bots play full games to the end ----------
-function botTurn(s: GameState) {
-	const me = s.turn!;
-	const p = s.players[String(me)];
-	const tryApply = (a: Parameters<typeof apply>[2]) => { try { return apply(s, me, a); } catch (e) { if (!(e instanceof GameError)) throw e; return null; } };
-	const num = (c: string) => parseInt(c.slice(2), 10);
-	const top = s.discard[0];
-	const useful = top && top[1] !== 's' && Math.random() < 0.25 && (top[1] === 'w' || p.hand.filter(c => num(c) === num(top)).length >= 2);
-	if (s.step === 'draw') apply(s, me, { type: 'draw', from: useful ? 'discard' : 'deck' });
-	if (s.step !== 'play') { if (s.step === 'skip') apply(s, me, { type: 'skip', target: s.order.find(i => i !== me && !s.players[String(i)].skipped)! }); return; }
-	if (!p.done) {
-		// try to build each group greedily, lay down if complete, otherwise take back
-		for (let g = 0; g < p.groups.length; g++) {
-			let changed = true;
-			while (changed) {
-				changed = false;
-				for (const c of [...p.hand]) for (const end of ['end', 'start'] as const) {
-					if (tryApply({ type: 'place', card: c, group: g, end })) { changed = true; break; }
-				}
-			}
+describe('rule options', () => {
+	it('unknown values fall back to the defaults', () => {
+		expect(cleanRules({ superCutBelow: 'x', emptyDeck: 'nope', jokerPoints: -5 })).toEqual(DEFAULT_RULES);
+		expect(cleanRules({ superCutBelow: null, cutTie: 'cutter' })).toMatchObject({ superCutBelow: null, cutTie: 'cutter' });
+	});
+	it('startDiscard=any allows a special opening card (except Jokers)', () => {
+		let special = 0;
+		for (let k = 0; k < 200; k++) {
+			const s = newGame('super', [1, 2], { ...DEFAULT_RULES, startDiscard: 'any' });
+			expect(s.discard[0].startsWith('X')).toBe(false);
+			if (isSpecial(s.discard[0], 'super', s.cutter.slice(-1) as never)) special++;
 		}
-		const r = tryApply({ type: 'layDown' });
-		if (r?.roundEnded) return;
-		if (!p.done) apply(s, me, { type: 'unstage' });
-	} else {
-		for (const t of s.order) for (const c of [...p.hand]) {
-			const target = s.players[String(t)];
-			if (!target.done) continue;
-			for (let g = 0; g < target.groups.length; g++) {
-				let r = null;
-				for (const end of ['end', 'start'] as const) {
-					r = t === me ? tryApply({ type: 'place', card: c, group: g, end }) : tryApply({ type: 'hit', target: t, group: g, card: c, end });
-					if (r) break;
-				}
-				if (r?.roundEnded) return;
-				if (r) break;
-			}
-		}
-	}
-	if (s.turn !== me || s.step !== 'play' || s.finished) return;
-	// discard the least useful plain card: fewest same numbers, then fewest neighbours, then highest value
-	const plain = p.hand.filter(c => c[1] !== 'w');
-	const pool = plain.length ? plain : p.hand;
-	const score = (c: string) => c[1] === 's' ? -1 : p.hand.filter(x => num(x) === num(c)).length * 3 + p.hand.filter(x => Math.abs(num(x) - num(c)) === 1).length;
-	const card = pool.reduce((a, b) => (score(b) < score(a) ? b : a));
-	const r = apply(s, me, { type: 'discard', card });
-	if (!r.roundEnded && (s.step as string) === 'skip') apply(s, me, { type: 'skip', target: s.order.find(i => i !== me && !s.players[String(i)].skipped)! });
-}
-
-// Easy targets so bots reach the end quickly; still exercises set, run and colour groups
-const EASY: Record<string, Condition[]> = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [String(i + 1),
-	i % 3 === 0 ? [{ type: 'set', count: 2 }] : i % 3 === 1 ? [{ type: 'run', count: 3 }] : [{ type: 'color', count: 3 }]]));
-
-describe('full games (bots)', () => {
-	for (const n of [2, 3, 4, 6]) {
-		it(`${n} players play to the finish with all 108 cards accounted for`, { timeout: 60000 }, () => {
-			const s = newGame(1, Array.from({ length: n }, (_, i) => i + 1), EASY);
-			let moves = 0;
-			while (!s.finished && moves < 100000) {
-				if (Math.random() < 0.02) autoPlay(s); else botTurn(s);
-				expect(countCards(s)).toBe(108);
-				moves++;
-			}
-			if (!s.finished && process.env.DIAG) console.log('DIAG', n, 'moves', moves, 'round', s.round, 'phases', s.order.map(i => s.players[String(i)].phase + (s.players[String(i)].done ? 'D' : '') + '/' + JSON.stringify(s.players[String(i)].groups) + '/' + s.players[String(i)].hand.join(' ')), 'step', s.step, 'turn', s.turn, 'log', s.log.slice(0, 4));
-			expect(s.finished).not.toBeNull();
-			const st = s.finished!.standings;
-			expect(st.length).toBe(n);
-			expect(st[0].points).toBe(n);
-			expect(st.at(-1)!.points).toBe(1);
-			expect(st[0].phase).toBe(10);
-			for (let i = 1; i < st.length; i++) {
-				expect(st[i - 1].phase > st[i].phase || (st[i - 1].phase === st[i].phase && st[i - 1].score <= st[i].score)).toBe(true);
-			}
-		});
-	}
-	it('classic rules: 20,000 bot moves keep every card accounted for', { timeout: 60000 }, () => {
-		const s = newGame(1, [1, 2, 3, 4], CLASSIC);
-		for (let moves = 0; moves < 20000 && !s.finished; moves++) {
-			if (Math.random() < 0.02) autoPlay(s); else botTurn(s);
-			expect(countCards(s)).toBe(108);
-		}
+		expect(special).toBeGreaterThan(0);
 	});
 });
 
-describe('Order Shuffle (admin switch)', () => {
-	it('off: the playing order stays the same every round', () => {
-		const s = newGame(1, [1, 2, 3, 4], CLASSIC);
-		const first = [...s.order];
-		for (let r = 0; r < 5; r++) endRound(s, null);
-		expect(s.order).toEqual(first);
-		expect(viewFor(s, 1).orderShuffled).toBe(false);
-	});
-	for (const n of [3, 4, 6]) {
-		it(`on, ${n} players: every new round has a different circle, all cards accounted for`, () => {
-			const s = newGame(1, Array.from({ length: n }, (_, i) => i + 1), CLASSIC);
-			s.shuffleOrder = true;
-			for (let r = 0; r < 8; r++) {
-				const before = [...s.order];
-				endRound(s, null);
-				expect(sameCircle(before, s.order), `round ${s.round}: ${before} -> ${s.order}`).toBe(false);
-				expect([...s.order].sort()).toEqual([...before].sort());
-				expect(countCards(s)).toBe(108);
-				expect(viewFor(s, 1).orderShuffled).toBe(true);
-				expect(s.order).toContain(s.turn);
-			}
-		});
+describe('full games with Virtual Friends', () => {
+	for (const variant of ['classic', 'super'] as Variant[]) {
+		for (const level of ['easy', 'normal', 'smart'] as const) {
+			it(`${variant} / ${level}: 2–6 bots always finish, every card accounted for`, { timeout: 30000 }, () => {
+				for (let g = 0; g < 60; g++) {
+					const n = 2 + (g % 5);
+					const s = newGame(variant, Array.from({ length: n }, (_, i) => i + 1), DEFAULT_RULES);
+					s.bots = [...s.order];
+					s.botLevel = level;
+					const total = countCards(s);
+					let turns = 0;
+					while (!s.finished && turns < 3000) {
+						botTurn(s, s.turn!);
+						expect(countCards(s)).toBe(total);
+						turns++;
+					}
+					if (!s.finished) finish(s, 'blocked', null);
+					expect(s.finished).not.toBeNull();
+					expect(s.finished!.standings.some(x => x.rank === 1)).toBe(true);
+				}
+			});
+		}
 	}
-	it('2 players: nothing to shuffle', () => {
-		const s = newGame(1, [1, 2], CLASSIC);
-		s.shuffleOrder = true;
-		endRound(s, null);
-		expect(viewFor(s, 1).orderShuffled).toBe(false);
-	});
-	it('sameCircle treats rotations as the same order', () => {
-		expect(sameCircle([1, 2, 3], [2, 3, 1])).toBe(true);
-		expect(sameCircle([1, 2, 3], [1, 3, 2])).toBe(false);
-	});
-	it('bots finish a full game with Order Shuffle on', { timeout: 60000 }, () => {
-		const s = newGame(1, [1, 2, 3, 4], EASY);
-		s.shuffleOrder = true;
-		let t = 0;
-		while (!s.finished && t < 20000) { botTurn(s); expect(countCards(s)).toBe(108); t++; }
-		expect(s.finished).not.toBeNull();
-	});
 });

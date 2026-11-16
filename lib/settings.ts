@@ -1,37 +1,50 @@
-// App-wide settings stored in app_settings (changed by admins).
+// App-wide settings stored in app_settings (changed by admins): feature switches and the game-rule options.
 import { sql } from './db';
+import { cleanRules, DEFAULT_RULES, RuleOptions } from './rules';
 
-export interface AppSettings { virtualFriends: boolean; voiceChat: boolean; orderShuffle: boolean }
-type Key = 'virtual_friends' | 'voice_chat' | 'order_shuffle';
+export interface AppSettings { virtualFriends: boolean; voiceChat: boolean }
+type Key = 'virtual_friends' | 'voice_chat';
 
-let cache: { at: number; value: AppSettings } | null = null;
+let cache: { at: number; value: AppSettings; rules: RuleOptions } | null = null;
 
-export async function getSettings(): Promise<AppSettings> {
-	if (cache && Date.now() - cache.at < 15000) return cache.value;
-	let value: AppSettings = { virtualFriends: true, voiceChat: false, orderShuffle: false };
+async function load() {
+	if (cache && Date.now() - cache.at < 15000) return cache;
+	let value: AppSettings = { virtualFriends: true, voiceChat: false };
+	let rules: RuleOptions = DEFAULT_RULES;
 	try {
-		const rows = await sql<{ key: string; value: { enabled?: boolean } }[]>`select key, value from app_settings`;
+		const rows = await sql<{ key: string; value: Record<string, unknown> }[]>`select key, value from app_settings`;
 		const on = (k: Key, dflt: boolean) => { const r = rows.find(x => x.key === k); return r ? r.value?.enabled === true || (dflt && r.value?.enabled !== false) : dflt; };
-		value = { virtualFriends: on('virtual_friends', true), voiceChat: on('voice_chat', false), orderShuffle: on('order_shuffle', false) };
+		value = { virtualFriends: on('virtual_friends', true), voiceChat: on('voice_chat', false) };
+		rules = cleanRules(rows.find(x => x.key === 'rules')?.value);
 	} catch {
-		// app_settings missing (migration 001 not run yet): keep defaults, but Virtual Friends needs the migration
-		value = { virtualFriends: false, voiceChat: false, orderShuffle: false };
+		// app_settings missing (migration 001 not run yet): keep defaults, but Virtual Friends need the migration
+		value = { virtualFriends: false, voiceChat: false };
 	}
-	cache = { at: Date.now(), value };
-	return value;
+	cache = { at: Date.now(), value, rules };
+	return cache;
 }
 
-async function setSwitch(key: Key, enabled: boolean, adminId: number): Promise<AppSettings> {
+export async function getSettings(): Promise<AppSettings> { return (await load()).value; }
+
+/** The rule options new games start with (each game keeps a snapshot, so changes never affect games in progress). */
+export async function getRules(): Promise<RuleOptions> { return (await load()).rules; }
+
+async function put(key: string, value: unknown, adminId: number) {
 	await sql`
-		insert into app_settings (key, value, updated_at, updated_by) values (${key}, ${sql.json({ enabled })}, now(), ${adminId})
+		insert into app_settings (key, value, updated_at, updated_by) values (${key}, ${sql.json(value as never)}, now(), ${adminId})
 		on conflict (key) do update set value = excluded.value, updated_at = now(), updated_by = excluded.updated_by`;
 	cache = null;
-	return getSettings();
 }
 
-export const setVirtualFriends = (enabled: boolean, adminId: number) => setSwitch('virtual_friends', enabled, adminId);
-export const setVoiceChat = (enabled: boolean, adminId: number) => setSwitch('voice_chat', enabled, adminId);
-export const setOrderShuffle = (enabled: boolean, adminId: number) => setSwitch('order_shuffle', enabled, adminId);
+export const setVirtualFriends = (enabled: boolean, adminId: number) => put('virtual_friends', { enabled }, adminId);
+export const setVoiceChat = (enabled: boolean, adminId: number) => put('voice_chat', { enabled }, adminId);
+export async function setRules(raw: unknown, adminId: number): Promise<RuleOptions> {
+	const rules = cleanRules({ ...(await getRules()), ...(raw && typeof raw === 'object' ? raw : {}) });
+	await put('rules', rules, adminId);
+	console.log('[admin]', JSON.stringify({ by: adminId, action: 'rules', rules }));
+	return rules;
+}
+
 export const voiceConfigured = () => !!(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
 
 /** Names (never values) of server settings that are missing, grouped by feature — shown to admins. */

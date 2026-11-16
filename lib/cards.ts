@@ -1,15 +1,12 @@
 // Server-side card utilities (uses Node's crypto RNG). Pure helpers live in card-codes.ts.
 import { randomInt } from 'crypto';
-import { COLOURS, type Card } from './card-codes';
+import { deckFor, type Card, type Variant } from './card-codes';
 
 export * from './card-codes';
 
-export function newDeck(): Card[] {
-	const cards: Card[] = [];
-	for (const copy of [1, 2]) for (const col of COLOURS) for (let n = 1; n <= 12; n++) cards.push(`${copy}${col}${n}`);
-	for (let k = 1; k <= 4; k++) cards.push(`${k}ss`);
-	for (let k = 1; k <= 8; k++) cards.push(`${k}ww`);
-	return shuffle(cards);
+/** A freshly shuffled deck: 52 cards (Classic) or 54 with two Jokers (Super). */
+export function newDeck(variant: Variant): Card[] {
+	return shuffle(deckFor(variant));
 }
 
 /** Fisher–Yates with a cryptographic RNG. */

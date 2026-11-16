@@ -59,17 +59,17 @@ export async function playerStats(userId: number): Promise<PlayerStats> {
 }
 
 export interface HistoryGame {
-	id: number; status: 'finished' | 'ended'; at: string | null; round: number;
+	id: number; status: 'finished' | 'ended'; at: string | null; variant: string; moves: number; how: string | null;
 	practice: boolean; endReason: string | null; endedBy: string | null;
 	myRank: number | null; myLeft: string | null;
-	players: { id: number; username: string; photo: string; isBot: boolean; rank: number | null; phase: number; score: number; left: string | null }[];
+	players: { id: number; username: string; photo: string; isBot: boolean; rank: number | null; points: number; cut: boolean; left: string | null }[];
 	log: string[];
 }
 
 /** My last 20 finished or ended games, newest first, with final places and the last few table events. */
 export async function recentGames(userId: number): Promise<HistoryGame[]> {
-	const games = await sql<{ id: number; status: 'finished' | 'ended'; finished_at: Date | null; updated_at: Date; round: number; end_reason: string | null; ended_by_name: string | null; log: string[] | null; my_rank: number | null; my_left: string | null }[]>`
-		select g.id, g.status, g.finished_at, g.updated_at, g.round, g.end_reason,
+	const games = await sql<{ id: number; status: 'finished' | 'ended'; finished_at: Date | null; updated_at: Date; variant: string; moves: number; how: string | null; end_reason: string | null; ended_by_name: string | null; log: string[] | null; my_rank: number | null; my_left: string | null }[]>`
+		select g.id, g.status, g.finished_at, g.updated_at, g.variant, coalesce((g.state->>'moves')::int, 0) as moves, g.state->'finished'->>'how' as how, g.end_reason,
 		       (select username from users where id = g.ended_by) as ended_by_name,
 		       g.state->'log' as log, me.final_rank as my_rank, me.left_reason as my_left
 		from game_players me join games g on g.id = me.game_id
@@ -78,11 +78,11 @@ export async function recentGames(userId: number): Promise<HistoryGame[]> {
 		limit 20`;
 	if (!games.length) return [];
 	const ids = games.map(g => g.id);
-	const players = await sql<{ game_id: number; user_id: number; username: string; photo: string; is_bot: boolean; final_rank: number | null; phase: number; score: number; left_reason: string | null }[]>`
-		select p.game_id, p.user_id, u.username, u.photo, u.is_bot, p.final_rank, p.phase, p.score, p.left_reason
+	const players = await sql<{ game_id: number; user_id: number; username: string; photo: string; is_bot: boolean; final_rank: number | null; points: number; has_cut_card: boolean; left_reason: string | null }[]>`
+		select p.game_id, p.user_id, u.username, u.photo, u.is_bot, p.final_rank, p.points, p.has_cut_card, p.left_reason
 		from game_players p join users u on u.id = p.user_id
 		where p.game_id in ${sql(ids)}
-		order by p.game_id, p.final_rank nulls last, p.score, p.seat`;
+		order by p.game_id, p.final_rank nulls last, p.points, p.seat`;
 
 	// names for {id} placeholders in the logs (super admins may not be at the table)
 	const logIds = new Set<number>();
@@ -93,10 +93,10 @@ export async function recentGames(userId: number): Promise<HistoryGame[]> {
 	return games.map(g => {
 		const ps = players.filter(p => p.game_id === g.id);
 		return {
-			id: g.id, status: g.status, at: (g.finished_at || g.updated_at)?.toISOString() ?? null, round: g.round,
+			id: g.id, status: g.status, at: (g.finished_at || g.updated_at)?.toISOString() ?? null, variant: g.variant, moves: g.moves, how: g.how,
 			practice: ps.some(p => p.is_bot), endReason: g.end_reason, endedBy: g.ended_by_name,
 			myRank: g.my_rank, myLeft: g.my_left,
-			players: ps.map(p => ({ id: p.user_id, username: p.username, photo: p.photo, isBot: p.is_bot, rank: p.final_rank, phase: p.phase, score: p.score, left: p.left_reason })),
+			players: ps.map(p => ({ id: p.user_id, username: p.username, photo: p.photo, isBot: p.is_bot, rank: p.final_rank, points: p.points, cut: p.has_cut_card, left: p.left_reason })),
 			log: (g.log || []).map(line => line.replace(/\{(\d+)\}/g, (_, x) => names.get(Number(x)) || 'Player')),
 		};
 	});

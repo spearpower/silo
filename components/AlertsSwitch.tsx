@@ -6,8 +6,8 @@ import { disablePush, enablePush, pushState, type PushState } from '@/lib/pushCl
 const NOTE: Record<PushState, string> = {
 	on: 'This phone buzzes when it’s your turn, a game starts, or a friend invites you.',
 	off: 'Get a buzz when it’s your turn, a game starts, or a friend invites you.',
-	blocked: 'Alerts are blocked for Rummy10 in this browser’s settings. Allow notifications there, then come back.',
-	'ios-install': 'On iPhone, alerts work once Rummy10 is on your Home Screen: tap Share → Add to Home Screen, then open it from there.',
+	blocked: 'Alerts are blocked for PicknPlay in this browser’s settings. Allow notifications there, then come back.',
+	'ios-install': 'On iPhone, alerts work once PicknPlay is on your Home Screen: tap Share → Add to Home Screen, then open it from there.',
 	unsupported: 'This browser can’t show alerts.',
 };
 

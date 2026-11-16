@@ -10,7 +10,7 @@ function configure(): boolean {
 	if (ready !== null) return ready;
 	const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
 	ready = !!(pub && priv);
-	if (ready) webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://phase10-react.vercel.app', pub!, priv!);
+	if (ready) webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', pub!, priv!);
 	return ready;
 }
 export const pushConfigured = () => configure();

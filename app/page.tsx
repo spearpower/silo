@@ -22,7 +22,7 @@ export default async function PlayPage() {
 			<NavBar trailing={<SignOutButton />} />
 			<main>
 				<h1 className="large-title">Play</h1>
-				<p className="subtitle">Get 2–6 friends together and race through the 10 phases.</p>
+				<p className="subtitle">Match the suit or rank, hit them with 2s, and cut when your hand is low. 2–6 players, Classic or Super.</p>
 
 				<PlayExtras />
 
@@ -71,7 +71,7 @@ export default async function PlayPage() {
 				<nav className="group" aria-label="Help">
 					<Link className="row-link" href="/how-to-play">
 						<span className="row-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" /><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5" /></svg></span>
-						<span className="row-text"><span className="row-title">How to Play</span><span className="row-sub">The 10 phases, special cards and scoring</span></span>
+						<span className="row-text"><span className="row-title">How to Play</span><span className="row-sub">Matching, special cards, cutting and scoring</span></span>
 						<Chevron />
 					</Link>
 					<Link className="row-link" href="/privacy">

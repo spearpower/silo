@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 143 194" width="143" height="194">
-<rect x="1" y="1" width="141" height="192" rx="14" fill="#1B1D26" stroke="rgba(0,0,0,.18)" stroke-width="1.5"/>
-
-<path d="M71.5 84 L37.5 84.0 A34 34 0 0 1 71.5 50.0 Z" fill="#D7263D"/><path d="M71.5 84 L71.5 50.0 A34 34 0 0 1 105.5 84.0 Z" fill="#2457C5"/><path d="M71.5 84 L105.5 84.0 A34 34 0 0 1 71.5 118.0 Z" fill="#178A4C"/><path d="M71.5 84 L71.5 118.0 A34 34 0 0 1 37.5 84.0 Z" fill="#F0B21C"/>
-<circle cx="71.5" cy="84" r="13" fill="#1B1D26"/>
-<text x="12" y="31" font-family="ui-rounded,'SF Pro Rounded','Arial Rounded MT Bold','Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="22" fill="#fff">W</text>
-<text x="71.5" y="160" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Arial Rounded MT Bold','Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-weight="900" font-size="30" fill="#fff" letter-spacing="2">WILD</text>
-</svg>

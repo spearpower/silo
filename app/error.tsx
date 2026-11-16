@@ -11,7 +11,7 @@ export default function ErrorScreen({ error, reset }: { error: Error & { digest?
 	return (
 		<div className="app centered"><main className="center">
 			<div className="brand"><img src="/icons/icon-192.png" alt="" /><h1 className="large-title">Something went wrong</h1></div>
-			<p className="subtitle">Your game is saved. Tap Try Again, or Reload to get the latest version of Rummy10.</p>
+			<p className="subtitle">Your game is saved. Tap Try Again, or Reload to get the latest version of PicknPlay.</p>
 			<button className="btn btn-primary" type="button" onClick={() => reset()}>Try Again</button>
 			<button className="btn btn-plain" type="button" onClick={() => location.reload()}>Reload</button>
 			<a className="btn btn-plain" href="/">Back to Play</a>

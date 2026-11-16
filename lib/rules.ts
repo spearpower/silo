@@ -1,68 +1,136 @@
-// Meld rules. The same functions validate a single placement (partial group)
-// and a full group when a phase is laid down. Wilds stand in for any card;
-// a Skip can never be part of a group.
-import { Card, isSkip, isWild, colourOf, numberOf } from './card-codes';
+// PicknPlay rules: the variants, the configurable "items to agree before play" (rules.MD §5),
+// and the pure matching logic shared by the server engine, the Virtual Friends and the board.
+// rules.MD is the authority; anything it leaves open lives in RuleOptions with a documented default.
+import { BLACK_SPADE_ACE, Card, isJoker, rankOf, Suit, suitOf, Variant } from './card-codes';
 
-export type ConditionType = 'set' | 'run' | 'color' | 'runcolor';
-export interface Condition { type: ConditionType; count: number }
+export interface VariantInfo { id: Variant; name: string; short: string; blurb: string; deck: number }
 
-export function conditionLabel(c: Condition): string {
-	switch (c.type) {
-		case 'set': return `Set of ${c.count}`;
-		case 'run': return `Run of ${c.count}`;
-		case 'color': return `${c.count} of one colour`;
-		case 'runcolor': return `Colour run of ${c.count}`;
+export const VARIANTS: VariantInfo[] = [
+	{ id: 'classic', name: 'PicknPlay Classic', short: 'Classic', deck: 52, blurb: '52 cards, no Jokers. 2s make the next player draw 2; any Ace cancels.' },
+	{ id: 'super', name: 'PicknPlay Super', short: 'Super', deck: 54, blurb: '54 cards with 2 Jokers. 2 = draw 2, 3 = draw 3, Joker = draw 5. Only the Black Spade Ace stops a 3 or Joker.' },
+];
+export const variantInfo = (v: unknown): VariantInfo => VARIANTS.find(x => x.id === v) || VARIANTS[0];
+export const asVariant = (x: unknown): Variant => (x === 'super' ? 'super' : 'classic');
+
+/**
+ * The rule decisions rules.MD leaves open. Admins change them on the Admin page; each game keeps the
+ * options it started with (a snapshot in its state), so a change never alters a game in progress.
+ */
+export interface RuleOptions {
+	/** Super cut threshold (rules.MD §3.4 / §5.1): the cutter's own hand, after playing the 7, must total below this. null = no threshold. */
+	superCutBelow: number | null;
+	/** The same idea for Classic (rules.MD sets none): null = no threshold. */
+	classicCutBelow: number | null;
+	/** §5.2: a player who can't (or won't) answer a penalty draws the whole amount; then their turn ends ('draw') or they play on ('drawThenPlay'). */
+	penaltyResponse: 'draw' | 'drawThenPlay';
+	/** §5.3: when the draw pile runs out, reshuffle the discard pile under its top card ('reshuffle'), or end the game and count hands ('count'). */
+	emptyDeck: 'reshuffle' | 'count';
+	/** §5.4: the opening discard is the top card of the draw pile; 'nonSpecial' re-buries special cards (2, 3, Joker, 8, J, A, the cut 7). */
+	startDiscard: 'nonSpecial' | 'any';
+	/** §5.5: several players tied on the lowest count: all share the win ('share'), or the player who cut wins the tie ('cutter'). */
+	cutTie: 'share' | 'cutter';
+	/** rules.MD gives Jokers no point value: what a Joker counts when hands are totalled. */
+	jokerPoints: number;
+	/** rules.MD doesn't say what a Joker may be played on: on any card (true) or only on a Joker (false). */
+	jokerOnAnything: boolean;
+}
+
+export const DEFAULT_RULES: RuleOptions = {
+	superCutBelow: 60,
+	classicCutBelow: null,
+	penaltyResponse: 'draw',
+	emptyDeck: 'reshuffle',
+	startDiscard: 'nonSpecial',
+	cutTie: 'share',
+	jokerPoints: 50,
+	jokerOnAnything: true,
+};
+
+const intOrNull = (x: unknown, dflt: number | null, min: number, max: number) => {
+	if (x === null) return null;
+	const n = Number(x);
+	return Number.isInteger(n) && n >= min && n <= max ? n : dflt;
+};
+
+/** Accept only known values; anything else falls back to the default. */
+export function cleanRules(raw: unknown): RuleOptions {
+	const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+	const d = DEFAULT_RULES;
+	return {
+		superCutBelow: 'superCutBelow' in r ? intOrNull(r.superCutBelow, d.superCutBelow, 1, 500) : d.superCutBelow,
+		classicCutBelow: 'classicCutBelow' in r ? intOrNull(r.classicCutBelow, d.classicCutBelow, 1, 500) : d.classicCutBelow,
+		penaltyResponse: r.penaltyResponse === 'drawThenPlay' ? 'drawThenPlay' : 'draw',
+		emptyDeck: r.emptyDeck === 'count' ? 'count' : 'reshuffle',
+		startDiscard: r.startDiscard === 'any' ? 'any' : 'nonSpecial',
+		cutTie: r.cutTie === 'cutter' ? 'cutter' : 'share',
+		jokerPoints: intOrNull(r.jokerPoints, d.jokerPoints, 0, 200) ?? d.jokerPoints,
+		jokerOnAnything: typeof r.jokerOnAnything === 'boolean' ? r.jokerOnAnything : d.jokerOnAnything,
+	};
+}
+
+export const cutThreshold = (variant: Variant, rules: RuleOptions) => (variant === 'super' ? rules.superCutBelow : rules.classicCutBelow);
+
+// ---------- Penalties ----------
+
+export type PenaltyKind = '2' | '3' | 'X';
+export interface Penalty { kind: PenaltyKind; amount: number }
+
+/** The draw penalty a card starts or adds to in this variant, or null. */
+export function penaltyOf(c: Card, variant: Variant): { kind: PenaltyKind; amount: number } | null {
+	if (rankOf(c) === '2') return { kind: '2', amount: 2 };
+	if (variant !== 'super') return null;
+	if (rankOf(c) === '3') return { kind: '3', amount: 3 };
+	if (isJoker(c)) return { kind: 'X', amount: 5 };
+	return null;
+}
+
+/** Cool-off: any Ace cancels a 2 penalty; only the Black Spade Ace cancels a 3 or Joker penalty (Super). */
+export function cancels(c: Card, p: Penalty): boolean {
+	if (rankOf(c) !== 'A') return false;
+	return p.kind === '2' ? true : c === BLACK_SPADE_ACE;
+}
+
+export const penaltyName = (k: PenaltyKind) => (k === 'X' ? 'Joker' : k);
+
+/** Cards with an effect: never chosen as the opening discard under the 'nonSpecial' rule. */
+export function isSpecial(c: Card, variant: Variant, cutterSuit: Suit | null): boolean {
+	const r = rankOf(c);
+	if (r === '2' || r === '8' || r === 'J' || r === 'A') return true;
+	if (variant === 'super' && (r === '3' || isJoker(c))) return true;
+	return r === '7' && suitOf(c) === cutterSuit;
+}
+
+// ---------- What may be played ----------
+
+export interface Table {
+	variant: Variant;
+	rules: RuleOptions;
+	top: Card | null;          // top of the discard pile
+	suit: Suit | null;         // suit to follow (the top card's, or the one named with an Ace)
+	penalty: Penalty | null;   // draw penalty waiting for the player on turn
+}
+
+/**
+ * May `c` go on the discard pile now?
+ *  - A penalty is waiting: only a matching penalty card (passes it on) or an allowed Ace (cancels it).
+ *  - An Ace goes on anything except a 2.
+ *  - A Joker (Super) goes on anything (rule option), and keeps the suit that was being followed.
+ *  - Otherwise: same suit as the suit to follow, or same rank as the top card.
+ */
+export function canPlay(t: Table, c: Card): boolean {
+	if (t.penalty) {
+		const p = penaltyOf(c, t.variant);
+		if (p && p.kind === t.penalty.kind) return true;
+		return cancels(c, t.penalty);
 	}
+	if (!t.top) return true;
+	if (isJoker(c)) return t.rules.jokerOnAnything || isJoker(t.top);
+	if (rankOf(c) === 'A') return rankOf(t.top) !== '2';
+	if (t.suit && suitOf(c) === t.suit) return true;
+	return !isJoker(t.top) && rankOf(c) === rankOf(t.top);
 }
 
-function sameNumber(cards: Card[]): boolean {
-	const n = cards.filter(c => !isWild(c)).map(numberOf);
-	return n.every(x => x === n[0]);
-}
+export const legalCards = (t: Table, hand: Card[]) => hand.filter(c => canPlay(t, c));
 
-function sameColour(cards: Card[]): boolean {
-	const c = cards.filter(x => !isWild(x)).map(colourOf);
-	return c.every(x => x === c[0]);
-}
-
-/** Cards in the given order form a run of consecutive numbers within 1..12 (ascending or descending). */
-export function isRunInOrder(cards: Card[]): boolean {
-	const idx = cards.findIndex(c => !isWild(c));
-	if (idx === -1) return cards.length <= 12; // only wilds so far
-	for (const dir of [1, -1]) {
-		const start = numberOf(cards[idx]) - dir * idx;
-		let ok = true;
-		for (let i = 0; i < cards.length; i++) {
-			const expected = start + dir * i;
-			if (expected < 1 || expected > 12) { ok = false; break; }
-			if (!isWild(cards[i]) && numberOf(cards[i]) !== expected) { ok = false; break; }
-		}
-		if (ok) return true;
-	}
-	return false;
-}
-
-/** Is this (possibly partial) group valid for the condition type? */
-export function isValidGroup(type: ConditionType, cards: Card[]): boolean {
-	if (cards.some(isSkip)) return false;
-	switch (type) {
-		case 'set': return sameNumber(cards);
-		case 'color': return sameColour(cards);
-		case 'run': return isRunInOrder(cards);
-		case 'runcolor': return isRunInOrder(cards) && sameColour(cards);
-	}
-}
-
-export type End = 'start' | 'end';
-
-/** Result of adding `card` to `group` at one end, or null if illegal. */
-export function placeInGroup(type: ConditionType, group: Card[], card: Card, end: End): Card[] | null {
-	if (isSkip(card)) return null;
-	const next = end === 'start' ? [card, ...group] : [...group, card];
-	return isValidGroup(type, next) ? next : null;
-}
-
-/** A full group satisfies its condition. */
-export function meetsCondition(cond: Condition, group: Card[]): boolean {
-	return group.length >= cond.count && isValidGroup(cond.type, group);
-}
+/** The 7 whose suit matches the cutter card. */
+export const cutSeven = (cutter: Card | null): Card | null => (cutter && suitOf(cutter) ? `7${suitOf(cutter)}` : null);

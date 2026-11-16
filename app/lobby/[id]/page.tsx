@@ -6,16 +6,16 @@ import { api, avatar, useGame } from '@/lib/client';
 import { ErrorBanner, NavBar, Skeleton } from '@/components/ui';
 import PinSheet from '@/components/PinSheet';
 import { LEVELS } from '@/lib/levels';
-import { ruleSet } from '@/lib/rulesets';
+import { variantInfo } from '@/lib/rules';
 import InviteFriends from '@/components/InviteFriends';
 
-const TIMERS = [0, 20, 30, 40, 60];
+const TIMERS = [0, 15, 20, 30, 40, 60];
 
 export default function LobbyPage({ params }: { params: Promise<{ id: string }> }) {
 	const id = Number(use(params).id);
 	const router = useRouter();
 	const { data, error: loadError, refresh } = useGame(id);
-	const [timer, setTimer] = useState(40);
+	const [timer, setTimer] = useState(-1);
 	const [level, setLevel] = useState<'easy' | 'normal' | 'smart'>('normal');
 	const [error, setError] = useState('');
 	const [busy, setBusy] = useState(false);
@@ -50,7 +50,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 	}, [quickOn, id, router]);
 
 	useEffect(() => { if (data?.status === 'playing' && data.isMember) router.replace(`/game/${id}`); }, [data, id, router]);
-	useEffect(() => { if (data) setTimer(t => (data.timerSec && t === 40 ? data.timerSec : t)); }, [data]);
+	useEffect(() => { if (data) setTimer(t => (t === -1 ? data.timerSec : t)); }, [data]);
 
 	if (!data) return (
 		<div className="app"><NavBar title="Waiting Room" back="/" backLabel="Play" />
@@ -66,7 +66,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 			<main><div className="empty"><strong>This table was closed</strong>The host cancelled this game.<Link className="btn btn-primary" href="/join">Find Another Table</Link></div></main></div>
 	);
 
-	const inviteText = () => `Join my Rummy10 table — game ${id}${data.pin ? `, PIN ${data.pin}` : ''}`;
+	const inviteText = () => `Join my PicknPlay table — game ${id}${data.pin ? `, PIN ${data.pin}` : ''}`;
 	const whatsapp = () => {
 		const url = `${location.origin}/lobby/${id}`;
 		window.open(`https://wa.me/?text=${encodeURIComponent(`${inviteText()}: ${url}`)}`, '_blank', 'noopener');
@@ -75,7 +75,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 		const url = `${location.origin}/lobby/${id}`;
 		const text = inviteText();
 		try {
-			if (navigator.share) await navigator.share({ title: 'Rummy10', text, url });
+			if (navigator.share) await navigator.share({ title: 'PicknPlay', text, url });
 			else { await navigator.clipboard.writeText(`${text}: ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2500); }
 		} catch { /* share cancelled */ }
 	};
@@ -86,7 +86,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 			<main>
 				<div className="lobby-head">
 					<div className="stat"><div className="k">Game number</div><div className="v">{id}</div></div>
-					<div className="stat"><div className="k">Rules</div><div className="v" style={{ fontSize: 20 }}>{ruleSet(data.edition).name}</div></div>
+					<div className="stat"><div className="k">Game</div><div className="v" style={{ fontSize: 20 }}>{variantInfo(data.variant).short}</div></div>
 					<div className="stat"><div className="k">PIN</div><div className="v">{data.isMember ? (data.pin || <span className="code-none">None</span>) : (data.private ? '••••' : <span className="code-none">None</span>)}</div></div>
 				</div>
 				{countdown !== null && (
@@ -171,7 +171,7 @@ export default function LobbyPage({ params }: { params: Promise<{ id: string }> 
 					) : isHost ? (
 						<>
 							<button className="btn btn-primary" type="button" disabled={busy || data.players.length < 2}
-								onClick={() => act(async () => { await api(`/api/games/${id}/start`, { timer, level }); router.replace(`/game/${id}`); })}>
+								onClick={() => act(async () => { await api(`/api/games/${id}/start`, { timer: timer < 0 ? data.timerSec : timer, level }); router.replace(`/game/${id}`); })}>
 								{data.players.length < 2 ? (vfOn ? 'Invite a friend or add a Virtual Friend' : 'Waiting for players…') : 'Start Game'}
 							</button>
 							<button className="btn btn-plain" type="button" disabled={busy}

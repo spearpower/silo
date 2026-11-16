@@ -15,11 +15,12 @@ next-env.d.ts
 .supabase/
 supabase/.temp/
 
-# Database files: only the public schema is committed.
+# Database files: only the schema and migrations are committed.
 # Imports, dumps and connection notes contain real player data or passwords.
 db/*
-!db/schema.sql
+!db/schema_final.sql
 !db/migrations/
+# db/seed_sample_users.sql stays local (test passwords)
 *.sql.gz
 *.dump
 *.backup
@@ -40,3 +41,6 @@ Thumbs.db
 .DS_Store
 .vscode/
 .idea/
+
+# Task brief (contains personal details and test passwords) stays local
+rules/PicknPlay_Refactoring_Prompt.md

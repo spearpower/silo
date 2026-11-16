@@ -1,4 +1,4 @@
-"""Synthesizes the original Rummy10 "your turn" chime -> public/sounds/turn.wav
+"""Synthesizes the original PicknPlay "your turn" chime -> public/sounds/turn.wav
 Two bell-like notes (C6 then G6) with inharmonic partials and exponential decay.
 Usage: python tools/gen_ding.py
 """

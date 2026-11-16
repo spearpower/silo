@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 143 194" width="143" height="194">
-<rect x="1" y="1" width="141" height="192" rx="14" fill="#2A2D3A" stroke="rgba(0,0,0,.18)" stroke-width="1.5"/>
-
-<circle cx="71.5" cy="84" r="32" fill="none" stroke="#FF8A3D" stroke-width="10"/>
-<path d="M49.5 106 L93.5 62" stroke="#FF8A3D" stroke-width="10" stroke-linecap="round"/>
-<text x="12" y="31" font-family="ui-rounded,'SF Pro Rounded','Arial Rounded MT Bold','Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="22" fill="#fff">S</text>
-<text x="71.5" y="160" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Arial Rounded MT Bold','Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-weight="900" font-size="30" fill="#fff" letter-spacing="2">SKIP</text>
-</svg>

@@ -6,7 +6,7 @@ type Sql = ReturnType<typeof postgres>;
 
 declare global {
 	// eslint-disable-next-line no-var
-	var __sofiSql: Sql | undefined;
+	var __picknplaySql: Sql | undefined;
 }
 
 function make(): Sql {
@@ -26,7 +26,7 @@ function make(): Sql {
 }
 
 function client(): Sql {
-	return globalThis.__sofiSql ?? (globalThis.__sofiSql = make());
+	return globalThis.__picknplaySql ?? (globalThis.__picknplaySql = make());
 }
 
 /** Lazy proxy: behaves exactly like the postgres.js `sql` tag. */

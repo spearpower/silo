@@ -1,8 +1,8 @@
 {
-  "name": "rummy10-web",
-  "version": "3.0.0",
+  "name": "picknplay",
+  "version": "1.0.0",
   "private": true,
-  "description": "Rummy10 — real-time phase card game (Next.js on Vercel + Postgres/Supabase)",
+  "description": "PicknPlay — real-time multiplayer shedding card game (Classic & Super). Next.js + PostgreSQL.",
   "scripts": {
     "dev": "next dev -p 3010",
     "build": "next build",
@@ -31,5 +31,9 @@
     "@types/web-push": "3.6.4",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spearpower/PicknPlay.git"
   }
 }

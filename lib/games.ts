@@ -1,48 +1,39 @@
-// Game service: lobby, start, moves, timers, results. Every write runs in one transaction
-// with the game row locked (SELECT ... FOR UPDATE), so simultaneous moves can't interleave.
+// Game service: lobby, start, moves, timers, results. Every write runs in one transaction with the
+// game row locked (SELECT ... FOR UPDATE), so simultaneous moves can't interleave. The engine state in
+// games.state is the single source of truth; the readable columns (top card, cutter, direction, hands…)
+// are mirrored from it in the same transaction for reports, and are never sent to other players.
 import type postgres from 'postgres';
 import { sql } from './db';
-import { Action, apply, autoPlay, AWAY_TURNS, awayPlayer, BotLevel, GameError, GameState, GameView, newGame, removePlayer, viewFor } from './engine';
-import { Condition } from './rules';
+import { Action, apply, autoPlay, AWAY_TURNS, awayPlayer, BotLevel, GameError, GameState, GameView, newGame, removePlayer, TableEvent, viewFor } from './engine';
 import { botTurn } from './bot';
-import { getSettings } from './settings';
+import { getRules, getSettings } from './settings';
 import { notifyGame, notifyLobbyList } from './realtime';
 import { after } from 'next/server';
 import { alertTurn } from './push';
 import { Session } from './session';
+import { isJoker, rankOf, SUIT_DB, suitOf, type Variant } from './card-codes';
 
 type Tx = postgres.TransactionSql<{}>;
 
-export const ROUND_SUMMARY_SECONDS = 8; // extra time on the first turn of a round while players read the summary
 const ONLINE_SECONDS = 20;
 /** Games with no moves for this long are closed (lobbies: abandoned; games in play: ended, no points). */
 export const STALE_HOURS = 24;
 export const BOT_LEVELS: BotLevel[] = ['easy', 'normal', 'smart'];
 export const asBotLevel = (x: unknown): BotLevel => (BOT_LEVELS.includes(x as BotLevel) ? (x as BotLevel) : 'normal');
+export const TIMERS = [0, 15, 20, 30, 40, 60];
+export const asTimer = (x: unknown) => (TIMERS.includes(Number(x)) ? Number(x) : 30);
 const MAX_VIRTUAL_FRIENDS = 5;
-/** A Virtual Friend "thinks" for 1.4–2.4 s so people can follow the play. */
-const botSeconds = () => 1.4 + Math.random();
-const isBotTurn = (st: GameState | null) => !!st && st.turn !== null && !!st.bots?.includes(st.turn);
+/** A Virtual Friend "thinks" for 1.2–2.2 s so people can follow the play. */
+const botSeconds = () => 1.2 + Math.random();
+const isBotTurn = (st: GameState | null) => !!st && st.turn !== null && !st.finished && !!st.bots?.includes(st.turn);
 /** Play whatever is due: a Virtual Friend's turn, or a person's timed-out turn. */
 function runDueTurn(st: GameState) {
 	return isBotTurn(st) ? botTurn(st, st.turn!) : autoPlay(st);
 }
 
-let phaseCache: Record<number, Record<string, Condition[]>> = {};
-async function phasesFor(edition: number): Promise<Record<string, Condition[]>> {
-	if (!phaseCache[edition]) {
-		const rows = await sql<{ phase_no: number; conditions: Condition[] }[]>`
-			select phase_no, conditions from phases where edition = ${edition} order by phase_no`;
-		if (!rows.length) throw new GameError('Rule set not found');
-		phaseCache[edition] = Object.fromEntries(rows.map(r => [String(r.phase_no), r.conditions]));
-	}
-	return phaseCache[edition];
-}
-export function _clearPhaseCache() { phaseCache = {}; }
-
 interface GameRow {
-	id: number; host_id: number; edition: number; pin: string | null; timer_sec: number; status: string;
-	round: number; version: number; state: GameState | null; turn_user_id: number | null;
+	id: number; host_id: number; variant: Variant; pin: string | null; timer_sec: number; status: string;
+	version: number; state: GameState | null; turn_user_id: number | null;
 	turn_deadline: Date | null; next_game_id: number | null;
 	end_reason?: string | null; ended_by?: number | null;
 }
@@ -56,14 +47,14 @@ async function nameOfUser(id: number | null | undefined): Promise<string | null>
 
 // ---------- Lobby ----------
 
-export async function createGame(user: Session, pin: string | null, timerSec: number, edition: 1 | 2 = 1): Promise<number> {
+export async function createGame(user: Session, pin: string | null, timerSec: number, variant: Variant = 'classic'): Promise<number> {
 	if (pin !== null && !/^\d{4}$/.test(pin)) throw new GameError('The PIN must be 4 digits');
 	const id = await sql.begin(async tx => {
 		// one open table per host: close any older lobby they left behind
 		await tx`update games set status = 'abandoned' where host_id = ${user.id} and status = 'lobby'`;
 		const [g] = await tx<{ id: number }[]>`
-			insert into games (host_id, pin, timer_sec, edition) values (${user.id}, ${pin}, ${timerSec}, ${edition}) returning id`;
-		await tx`insert into game_players (game_id, user_id, seat) values (${g.id}, ${user.id}, 1)`;
+			insert into games (host_id, pin, timer_sec, variant, deck_remaining) values (${user.id}, ${pin}, ${timerSec}, ${variant}, ${variant === 'super' ? 54 : 52}) returning id`;
+		await tx`insert into game_players (game_id, user_id, seat, card_count) values (${g.id}, ${user.id}, 1, 0)`;
 		return g.id;
 	});
 	await notifyLobbyList();
@@ -73,8 +64,8 @@ export async function createGame(user: Session, pin: string | null, timerSec: nu
 export async function listOpenGames(user: Session, publicOnly: boolean, search: string) {
 	await closeStaleGamesSometimes();
 	const s = search.replace(/\D/g, '');
-	return sql<{ id: number; private: boolean; host: string; photo: string; players: number; created_at: Date }[]>`
-		select g.id, (g.pin is not null) as private, h.username as host, h.photo, g.created_at,
+	return sql<{ id: number; private: boolean; variant: Variant; host: string; photo: string; players: number; created_at: Date }[]>`
+		select g.id, (g.pin is not null) as private, g.variant, h.username as host, h.photo, g.created_at,
 		       (select count(*)::int from game_players p where p.game_id = g.id) as players
 		from games g
 		join users h on h.id = g.host_id
@@ -90,9 +81,9 @@ export async function listOpenGames(user: Session, publicOnly: boolean, search: 
 
 export async function listMyGames(user: Session) {
 	await closeStaleGamesSometimes();
-	return sql<{ id: number; round: number; host: string; photo: string; players: number; my_turn: boolean }[]>`
-		select g.id, g.round, h.username as host, h.photo,
-		       (select count(*)::int from game_players p where p.game_id = g.id) as players,
+	return sql<{ id: number; variant: Variant; moves: number; host: string; photo: string; players: number; my_turn: boolean }[]>`
+		select g.id, g.variant, coalesce((g.state->>'moves')::int, 0) as moves, h.username as host, h.photo,
+		       (select count(*)::int from game_players p where p.game_id = g.id and p.left_at is null) as players,
 		       (g.turn_user_id = ${user.id}) as my_turn
 		from games g
 		join game_players me on me.game_id = g.id and me.user_id = ${user.id} and me.left_at is null
@@ -106,13 +97,13 @@ export async function listMyGames(user: Session) {
  * Quick Game: sit at the fullest open public table that still has a seat (host online),
  * or open a new public table. Returns where to go.
  */
-export async function quickGame(user: Session): Promise<{ id: number; created: boolean }> {
+export async function quickGame(user: Session, variant: Variant = 'classic'): Promise<{ id: number; created: boolean }> {
 	await closeStaleGamesSometimes();
 	const tables = await sql<{ id: number }[]>`
 		select g.id
 		from games g
 		join game_players hp on hp.game_id = g.id and hp.user_id = g.host_id
-		where g.status = 'lobby' and g.pin is null and g.host_id <> ${user.id}
+		where g.status = 'lobby' and g.pin is null and g.host_id <> ${user.id} and g.variant = ${variant}
 		  and hp.last_seen > now() - make_interval(secs => ${ONLINE_SECONDS})
 		  and (select count(*) from game_players p where p.game_id = g.id) < 6
 		order by (select count(*) from game_players p where p.game_id = g.id) desc, g.id
@@ -121,18 +112,18 @@ export async function quickGame(user: Session): Promise<{ id: number; created: b
 		try { await joinGame(user, t.id, null); return { id: t.id, created: false }; }
 		catch (e) { if (!(e instanceof GameError)) throw e; } // filled up or started meanwhile: try the next one
 	}
-	return { id: await createGame(user, null, 40, 1), created: true };
+	return { id: await createGame(user, null, 30, variant), created: true };
 }
 
 /** Quick Game host after the wait: fill the table to 3 with Virtual Friends and start. */
 export async function quickFillAndStart(user: Session, gameId: number): Promise<void> {
-	const [g] = await sql<{ host_id: number; status: string; players: number }[]>`
-		select host_id, status, (select count(*)::int from game_players p where p.game_id = g.id) as players from games g where id = ${gameId}`;
+	const [g] = await sql<{ host_id: number; status: string; players: number; timer_sec: number }[]>`
+		select host_id, status, timer_sec, (select count(*)::int from game_players p where p.game_id = g.id) as players from games g where id = ${gameId}`;
 	if (!g) throw new GameError('Game not found', 404);
 	if (g.host_id !== user.id) throw new GameError('Only the host can start the game', 403);
 	if (g.status !== 'lobby') return;
 	for (let n = g.players; n < 3; n++) await addVirtualFriend(user, gameId);
-	await startGame(user, gameId, 40, 'normal');
+	await startGame(user, gameId, g.timer_sec, 'normal');
 }
 
 export async function joinGame(user: Session, gameId: number, pin: string | null): Promise<'joined' | 'member'> {
@@ -145,7 +136,7 @@ export async function joinGame(user: Session, gameId: number, pin: string | null
 		if (members.length >= 6) throw new GameError('This table is full (6 players)', 409);
 		const taken = new Set(members.map(m => m.seat));
 		const seat = [1, 2, 3, 4, 5, 6].find(x => !taken.has(x))!;
-		await tx`insert into game_players (game_id, user_id, seat) values (${gameId}, ${user.id}, ${seat})`;
+		await tx`insert into game_players (game_id, user_id, seat, card_count) values (${gameId}, ${user.id}, ${seat}, 0)`;
 		await bump(tx, gameId);
 		return 'joined' as const;
 	});
@@ -221,29 +212,33 @@ export async function endGame(user: Session, gameId: number, reasonRaw: unknown)
 }
 
 /** Take one player out of a running game; end it if fewer than 2 players (or no people) remain. */
-async function takeOut(tx: Tx, g: GameRow, target: number, by: number | null, reason: string, note: string, roundBefore = g.state!.round) {
+async function takeOut(tx: Tx, g: GameRow, target: number, by: number | null, reason: string, note: string) {
 	const state = g.state!;
 	if (!state.players[String(target)]) throw new GameError('That player is not in this game', 404);
+	const seqBefore = state.seq;
 	const left = removePlayer(state, target, note);
-	await tx`update game_players set left_at = now(), left_reason = ${reason}, left_by = ${by} where game_id = ${g.id} and user_id = ${target}`;
+	await tx`update game_players set left_at = now(), left_reason = ${reason}, left_by = ${by}, hand_cards = '[]'::jsonb, card_count = 0
+		where game_id = ${g.id} and user_id = ${target}`;
 	const people = state.order.filter(id => !state.bots?.includes(id)).length;
 	if (left < 2 || people === 0) return finishEarly(tx, g, state, null, left < 2 ? 'Not enough players left' : 'Only Virtual Friends were left');
-	return save(tx, g, state, state.round !== roundBefore);
+	return save(tx, g, state, by ?? target, seqBefore);
 }
 
 export const AWAY_REASON = `Away · missed ${AWAY_TURNS} turns in a row`;
 
 /** After a timed-out turn: save, taking the player out if they've now missed AWAY_TURNS turns in a row. */
-async function saveAfterTimeout(tx: Tx, g: GameRow, state: GameState, timedOut: number | null, roundBefore: number) {
+async function saveAfterTimeout(tx: Tx, g: GameRow, state: GameState, timedOut: number | null, seqBefore: number) {
 	const away = awayPlayer(state, timedOut);
-	if (away === null) return save(tx, g, state, state.round !== roundBefore);
-	return takeOut(tx, { ...g, state }, away, null, AWAY_REASON, `was taken out · ${AWAY_REASON.toLowerCase()}`, roundBefore);
+	if (away === null) return save(tx, g, state, timedOut ?? g.host_id, seqBefore);
+	await recordEvents(tx, g.id, state, timedOut ?? g.host_id, seqBefore);
+	return takeOut(tx, { ...g, state }, away, null, AWAY_REASON, `was taken out · ${AWAY_REASON.toLowerCase()}`);
 }
 
 async function finishEarly(tx: Tx, g: GameRow, state: GameState, by: number | null, reason: string) {
 	state.turn = null;
 	state.log.unshift(by ? `Game ended by {${by}} · ${reason}` : `Game ended · ${reason}`);
-	state.log.length = Math.min(state.log.length, 6);
+	state.log.length = Math.min(state.log.length, 8);
+	await tx`insert into game_events (game_id, user_id, event_type, payload) values (${g.id}, ${by ?? g.host_id}, 'ended', ${tx.json({ reason, by } as never)})`;
 	const [row] = await tx<{ version: number; turn_deadline: Date | null; status: string }[]>`
 		update games set state = ${tx.json(state as never)}, status = 'ended', end_reason = ${reason}, ended_by = ${by},
 			turn_user_id = null, turn_deadline = null, finished_at = now(), version = version + 1
@@ -284,8 +279,8 @@ export async function closeStaleGames(): Promise<{ lobbies: number; games: numbe
 
 /** Admin overview: games being played and open waiting rooms (last 24 h), with people and/or Virtual Friends. */
 export async function liveTables() {
-	return sql<{ id: number; status: 'lobby' | 'playing'; private: boolean; edition: number; host: string; round: number; timer_sec: number; updated_at: Date; created_at: Date; with_bots: boolean; people: number; players: { id: number; username: string; photo: string; isBot: boolean }[]; turn: string | null }[]>`
-		select g.id, g.status, (g.pin is not null) as private, g.edition, h.username as host, g.round, g.timer_sec, g.updated_at, g.created_at,
+	return sql<{ id: number; status: 'lobby' | 'playing'; private: boolean; variant: Variant; host: string; moves: number; timer_sec: number; updated_at: Date; created_at: Date; with_bots: boolean; people: number; players: { id: number; username: string; photo: string; isBot: boolean }[]; turn: string | null }[]>`
+		select g.id, g.status, (g.pin is not null) as private, g.variant, h.username as host, coalesce((g.state->>'moves')::int, 0) as moves, g.timer_sec, g.updated_at, g.created_at,
 		       exists(select 1 from game_players p join users u on u.id = p.user_id where p.game_id = g.id and p.left_at is null and u.is_bot) as with_bots,
 		       (select count(*)::int from game_players p join users u on u.id = p.user_id where p.game_id = g.id and p.left_at is null and not u.is_bot) as people,
 		       (select coalesce(json_agg(json_build_object('id', u.id, 'username', u.username, 'photo', u.photo, 'isBot', u.is_bot) order by p.seat), '[]'::json)
@@ -298,6 +293,7 @@ export async function liveTables() {
 }
 
 export async function startGame(user: Session, gameId: number, timerSec: number, level: BotLevel = 'normal'): Promise<void> {
+	const rules = await getRules();
 	await sql.begin(async tx => {
 		const g = await lock(tx, gameId);
 		if (g.host_id !== user.id) throw new GameError('Only the host can start the game', 403);
@@ -307,11 +303,13 @@ export async function startGame(user: Session, gameId: number, timerSec: number,
 		if (players.length < 2) throw new GameError('You need at least 2 players to start');
 		const bots = players.filter(p => p.is_bot).map(p => p.user_id);
 		if (bots.length && !(await getSettings()).virtualFriends) throw new GameError('Virtual Friends are switched off. Remove them to start.', 409);
-		const state = newGame(g.edition, players.map(p => p.user_id), await phasesFor(g.edition));
+		const state = newGame(g.variant, players.map(p => p.user_id), rules);
 		state.bots = bots;
 		if (bots.length) state.botLevel = level;
 		await tx`update games set timer_sec = ${timerSec} where id = ${gameId}`;
-		await save(tx, { ...g, timer_sec: timerSec }, state, false); // round 1: no summary to read
+		await tx`insert into game_events (game_id, user_id, event_type, payload) values (${gameId}, ${user.id}, 'start',
+			${tx.json({ variant: g.variant, order: state.order, cutter: state.cutter, top: state.discard[0], rules } as never)})`;
+		await save(tx, { ...g, timer_sec: timerSec }, state, user.id, state.seq);
 	});
 	await ping(gameId);
 	await notifyLobbyList();
@@ -325,9 +323,9 @@ export async function playAgain(user: Session, gameId: number): Promise<number> 
 		if (g.next_game_id) return g.next_game_id;
 		await tx`update games set status = 'abandoned' where host_id = ${user.id} and status = 'lobby'`;
 		const [ng] = await tx<{ id: number }[]>`
-			insert into games (host_id, edition, pin, timer_sec) values (${user.id}, ${g.edition}, ${g.pin}, ${g.timer_sec}) returning id`;
-		await tx`insert into game_players (game_id, user_id, seat)
-			select ${ng.id}, user_id, seat from game_players where game_id = ${gameId}`;
+			insert into games (host_id, variant, pin, timer_sec, deck_remaining) values (${user.id}, ${g.variant}, ${g.pin}, ${g.timer_sec}, ${g.variant === 'super' ? 54 : 52}) returning id`;
+		await tx`insert into game_players (game_id, user_id, seat, card_count)
+			select ${ng.id}, user_id, seat, 0 from game_players where game_id = ${gameId} and left_at is null`;
 		await tx`update games set next_game_id = ${ng.id} where id = ${gameId}`;
 		await bump(tx, gameId);
 		return ng.id;
@@ -355,29 +353,31 @@ export async function addVirtualFriend(user: Session, gameId: number): Promise<v
 		if (!bot) throw new GameError('No more Virtual Friends are free', 409);
 		const taken = new Set(seats.map(x => x.seat));
 		const seat = [1, 2, 3, 4, 5, 6].find(x => !taken.has(x))!;
-		await tx`insert into game_players (game_id, user_id, seat) values (${gameId}, ${bot.id}, ${seat})`;
+		await tx`insert into game_players (game_id, user_id, seat, card_count) values (${gameId}, ${bot.id}, ${seat}, 0)`;
 		await bump(tx, gameId);
 	});
 	await ping(gameId);
 }
 
 /** One tap: a private table with `count` Virtual Friends that starts right away. */
-export async function startPractice(user: Session, count: number, timerSec: number, level: BotLevel = 'normal', edition: 1 | 2 = 1): Promise<number> {
+export async function startPractice(user: Session, count: number, timerSec: number, level: BotLevel = 'normal', variant: Variant = 'classic'): Promise<number> {
 	if (!(await getSettings()).virtualFriends) throw new GameError('Virtual Friends are switched off by the admin', 403);
 	const n = Math.max(1, Math.min(MAX_VIRTUAL_FRIENDS, Math.floor(count)));
-	const phases = await phasesFor(edition);
+	const rules = await getRules();
 	return sql.begin(async tx => {
 		await tx`update games set status = 'abandoned' where host_id = ${user.id} and status = 'lobby'`;
 		const pin = String(1000 + Math.floor(Math.random() * 9000)); // private, so it never shows in Open tables
-		const [g] = await tx<GameRow[]>`insert into games (host_id, pin, timer_sec, edition) values (${user.id}, ${pin}, ${timerSec}, ${edition}) returning *`;
+		const [g] = await tx<GameRow[]>`insert into games (host_id, pin, timer_sec, variant) values (${user.id}, ${pin}, ${timerSec}, ${variant}) returning *`;
 		const bots = await tx<{ id: number }[]>`select id from users where is_bot and status = 'active' order by random() limit ${n}`;
 		if (!bots.length) throw new GameError('No Virtual Friends are set up yet. Ask the admin to run the database update.', 409);
 		const ids = [user.id, ...bots.map(b => b.id)];
 		for (let i = 0; i < ids.length; i++) await tx`insert into game_players (game_id, user_id, seat) values (${g.id}, ${ids[i]}, ${i + 1})`;
-		const state = newGame(edition, ids, phases);
+		const state = newGame(variant, ids, rules);
 		state.bots = bots.map(b => b.id);
 		state.botLevel = level;
-		await save(tx, g, state, false);
+		await tx`insert into game_events (game_id, user_id, event_type, payload) values (${g.id}, ${user.id}, 'start',
+			${tx.json({ variant, order: state.order, cutter: state.cutter, top: state.discard[0], rules, practice: true } as never)})`;
+		await save(tx, g, state, user.id, state.seq);
 		return g.id;
 	});
 }
@@ -389,26 +389,25 @@ export interface MoveResult {
 	nextGameId: number | null; view: GameView | null;
 }
 
-/** Apply one move. Fast path: ~4 database round trips, answered from the saved state (no re-read). */
+/** Apply one move. Fast path: a handful of database round trips, answered from the saved state (no re-read). */
 export async function move(user: Session, gameId: number, action: Action): Promise<MoveResult> {
-	const { orderShuffle } = await getSettings(); // cached; applies to games already being played
 	return sql.begin(async tx => {
 		const g = await lockAsMember(tx, gameId, user.id);
 		if (g.status === 'ended') throw new GameError('This game was ended', 409);
+		if (g.status === 'finished') throw new GameError('This game has finished', 409);
 		if (g.status !== 'playing' || !g.state) throw new GameError('This game is not being played right now', 409);
 		const state = g.state;
-		const before = state.round;
-		state.shuffleOrder = orderShuffle;
+		const seqBefore = state.seq;
 		if (action.type === 'timeout') {
 			// Any player's device may report the timer; the server decides if it really ran out
 			if (!g.turn_deadline || g.turn_deadline.getTime() > Date.now() + 1000) return result(g, state, user.id, false);
 			const timedOut = state.turn;
 			runDueTurn(state);
-			const saved = await saveAfterTimeout(tx, g, state, timedOut, before);
+			const saved = await saveAfterTimeout(tx, g, state, timedOut, seqBefore);
 			return result({ ...g, ...saved }, state, user.id, true);
 		}
 		apply(state, user.id, action);
-		const saved = await save(tx, g, state, state.round !== before);
+		const saved = await save(tx, g, state, user.id, seqBefore);
 		return result({ ...g, ...saved }, state, user.id, true);
 	});
 }
@@ -436,11 +435,10 @@ export async function getGame(user: Session, gameId: number) {
 		await sql.begin(async tx => {
 			const locked = await lock(tx, gameId);
 			if (locked.status !== 'playing' || !locked.state || !locked.turn_deadline || locked.turn_deadline.getTime() >= Date.now() - grace(locked)) return;
-			const before = locked.state.round;
+			const seqBefore = locked.state.seq;
 			const timedOut = locked.state.turn;
-			locked.state.shuffleOrder = (await getSettings()).orderShuffle;
 			runDueTurn(locked.state);
-			await saveAfterTimeout(tx, locked, locked.state, timedOut, before);
+			await saveAfterTimeout(tx, locked, locked.state, timedOut, seqBefore);
 			changed = true;
 		});
 		if (changed) {
@@ -469,7 +467,7 @@ export async function getGame(user: Session, gameId: number) {
 		id: g.id,
 		me: user.id,
 		status: g.status,
-		edition: g.edition,
+		variant: g.variant,
 		hostId: g.host_id,
 		isMember,
 		pin: isMember ? g.pin : null,
@@ -520,46 +518,70 @@ async function lockAsMember(tx: Tx, gameId: number, userId: number): Promise<Gam
 	return g;
 }
 
-async function member(tx: Tx, gameId: number, userId: number) {
-	const [m] = await tx`select 1 from game_players where game_id = ${gameId} and user_id = ${userId}`;
-	if (!m) throw new GameError('You are not in this game', 403);
-}
-
 async function bump(tx: Tx, gameId: number) {
 	await tx`update games set version = version + 1 where id = ${gameId}`;
 }
 
-/** Persist engine state + turn deadline. Player progress only changes at round end, so it's written only then. */
-async function save(tx: Tx, g: GameRow, state: GameState, newRound: boolean) {
+/** Turn history: one game_events row per table event since `seqBefore` (moves, draws, penalties, effects, results). */
+async function recordEvents(tx: Tx, gameId: number, state: GameState, actor: number, seqBefore: number) {
+	const fresh = state.events.filter(e => e.n > seqBefore);
+	const rows: { game_id: number; user_id: number; event_type: string; payload: unknown }[] = fresh.map((e: TableEvent) => {
+		const { t, by, ...rest } = e;
+		return { game_id: gameId, user_id: by || actor, event_type: t, payload: rest };
+	});
+	if (state.finished) rows.push({ game_id: gameId, user_id: state.finished.by ?? actor, event_type: 'finish', payload: state.finished });
+	if (!rows.length) return;
+	await tx`insert into game_events ${tx(rows.map(r => ({ ...r, payload: tx.json(r.payload as never) })), 'game_id', 'user_id', 'event_type', 'payload')}`;
+}
+
+/**
+ * Persist the engine state + turn deadline, mirror the readable columns from it, write the turn history
+ * and — when the game ends — final places and leaderboard points.
+ */
+async function save(tx: Tx, g: GameRow, state: GameState, actor: number, seqBefore: number) {
 	const finished = !!state.finished;
-	const extra = newRound ? ROUND_SUMMARY_SECONDS : 0;
-	const secs = finished || !state.turn ? null
-		: isBotTurn(state) ? botSeconds() + extra
-		: g.timer_sec ? g.timer_sec + extra : null;
+	const secs = finished || state.turn === null ? null
+		: isBotTurn(state) ? botSeconds()
+		: g.timer_sec ? g.timer_sec : null;
+	const top = state.discard[0] ?? null;
 	const [row] = await tx<{ version: number; turn_deadline: Date | null; status: string }[]>`
 		update games set
 			state = ${tx.json(state as never)},
 			status = ${finished ? 'finished' : 'playing'},
-			round = ${state.round},
 			version = version + 1,
 			turn_user_id = ${state.turn},
 			turn_deadline = ${secs === null ? null : tx`now() + make_interval(secs => ${secs})`},
-			finished_at = ${finished ? tx`now()` : null}
+			finished_at = ${finished ? tx`now()` : null},
+			current_suit = ${finished ? null : SUIT_DB[state.suit]},
+			top_card_rank = ${top ? (isJoker(top) ? 'JOKER' : rankOf(top)) : null},
+			top_card_suit = ${top && !isJoker(top) ? SUIT_DB[suitOf(top)!] : null},
+			cutter_rank = ${rankOf(state.cutter)},
+			cutter_suit = ${SUIT_DB[suitOf(state.cutter)!]},
+			deck_remaining = ${state.deck.length},
+			discard_pile = ${tx.json(state.discard as never)},
+			direction = ${state.direction}
 		where id = ${g.id}
 		returning version, turn_deadline, status`;
-	if (newRound || finished) {
-		const rows = state.order.map(id => {
-			const p = state.players[String(id)];
-			return { uid: id, phase: p.phase, score: p.score, rank: state.finished?.standings.find(x => x.id === id)?.rank ?? null };
-		});
-		await tx`
-			update game_players as gp set phase = v.phase, score = v.score, final_rank = v.rank
-			from jsonb_to_recordset(${tx.json(rows as never)}) as v(uid bigint, phase int, score int, rank int)
-			where gp.game_id = ${g.id} and gp.user_id = v.uid`;
-	}
+
+	// Hands (server-side only: never selected for other players)
+	const hands = state.order.map(id => {
+		const hand = state.players[String(id)].hand;
+		const st = state.finished?.standings.find(x => x.id === id);
+		return { uid: id, hand, n: hand.length, pts: st ? st.points : 0, rank: st ? st.rank : null, cut: state.finished?.how === 'cut' && state.finished.by === id };
+	});
+	await tx`
+		update game_players as gp set hand_cards = v.hand, card_count = v.n,
+			points = case when ${finished} then v.pts else gp.points end,
+			final_rank = case when ${finished} then v.rank else gp.final_rank end,
+			has_cut_card = v.cut
+		from jsonb_to_recordset(${tx.json(hands as never)}) as v(uid bigint, hand jsonb, n int, pts int, rank int, cut boolean)
+		where gp.game_id = ${g.id} and gp.user_id = v.uid`;
+
+	await recordEvents(tx, g.id, state, actor, seqBefore);
+
 	// Games with Virtual Friends are practice: no leaderboard points
 	if (state.finished && !state.bots?.length) {
-		const pts = state.finished.standings.map(x => ({ user_id: x.id, game_id: g.id, points: x.points }));
+		const pts = state.finished.standings.map(x => ({ user_id: x.id, game_id: g.id, points: x.award }));
 		await tx`insert into game_points ${tx(pts, 'user_id', 'game_id', 'points')} on conflict (game_id, user_id) do nothing`;
 	}
 	return row;
@@ -613,7 +635,8 @@ export async function deleteAccount(user: Session, password: string, confirm: st
 
 		const [{ shared }] = await tx<{ shared: boolean }[]>`
 			select exists(select 1 from game_players where user_id = ${user.id} or left_by = ${user.id})
-			    or exists(select 1 from games where host_id = ${user.id} or turn_user_id = ${user.id} or ended_by = ${user.id}) as shared`;
+			    or exists(select 1 from games where host_id = ${user.id} or turn_user_id = ${user.id} or ended_by = ${user.id})
+			    or exists(select 1 from game_events where user_id = ${user.id}) as shared`;
 		if (!shared) {
 			await tx`delete from users where id = ${user.id}`;
 			return 'deleted' as const;

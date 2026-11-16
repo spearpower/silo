@@ -1,11 +1,12 @@
 'use client';
-// Admin hub: app-wide switches, and links to Players and Tables.
+// Admin hub: app-wide switches, the game-rule options rules.MD leaves open, and links to Players and Tables.
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { Chevron, ErrorBanner, NavBar, Skeleton } from '@/components/ui';
+import type { RuleOptions } from '@/lib/rules';
 
-interface Settings { virtualFriends: boolean; voiceChat: boolean; orderShuffle: boolean; voiceReady: boolean; missing?: { voice: string[]; alerts: string[]; dailyJob: string[] } }
+interface Settings { virtualFriends: boolean; voiceChat: boolean; rules: RuleOptions; voiceReady: boolean; missing?: { voice: string[]; alerts: string[]; dailyJob: string[] } }
 
 export default function AdminPage() {
 	const [s, setS] = useState<Settings | null>(null);
@@ -14,16 +15,22 @@ export default function AdminPage() {
 
 	useEffect(() => { api<Settings>('/api/admin/settings').then(setS).catch(e => setError(e.message)); }, []);
 
-	async function toggle(key: 'virtualFriends' | 'voiceChat' | 'orderShuffle', on: boolean) {
+	async function saveRules(patch: Partial<RuleOptions>, msg: string) {
+		if (!s) return;
+		const before = s;
+		setS({ ...s, rules: { ...s.rules, ...patch } }); setError(''); setSaved('');
+		try { setS(await api<Settings>('/api/admin/settings', { rules: patch })); setSaved(`${msg} — applies to games started from now on`); }
+		catch (e) { setError((e as Error).message); setS(before); }
+	}
+
+	async function toggle(key: 'virtualFriends' | 'voiceChat', on: boolean) {
 		if (!s) return;
 		const before = s;
 		setS({ ...s, [key]: on }); setError(''); setSaved('');
 		try {
 			const next = await api<Settings>('/api/admin/settings', { [key]: on });
 			setS(next);
-			setSaved(key === 'orderShuffle'
-				? (next.orderShuffle ? 'Order Shuffle is on: every new round gets a new playing order, in games already running too' : 'Order Shuffle is off: players keep their seats all game')
-				: key === 'virtualFriends'
+			setSaved(key === 'virtualFriends'
 				? (next.virtualFriends ? 'Virtual Friends are on for everyone' : 'Virtual Friends are off for everyone')
 				: (next.voiceChat ? 'Voice chat is on: players can talk at their tables' : 'Voice chat is off'));
 		} catch (e) { setError((e as Error).message); setS(before); }
@@ -59,11 +66,6 @@ export default function AdminPage() {
 						</div>
 						<p className="hint">Practice games against computer players, Quick Game filling, and adding them to empty seats. Games already in progress keep playing.</p>
 						<div className="switch-row">
-							<label htmlFor="shuffle">Order Shuffle</label>
-							<span className="switch"><input id="shuffle" type="checkbox" role="switch" checked={s.orderShuffle} onChange={e => toggle('orderShuffle', e.target.checked)} /><span /></span>
-						</div>
-						<p className="hint">Each new round is dealt with a new playing order, so players play before or after different people than in the last round. Applies straight away, also to games being played. Tables of 2 just alternate, as always.</p>
-						<div className="switch-row">
 							<label htmlFor="voice">Voice chat at tables</label>
 							<span className="switch"><input id="voice" type="checkbox" role="switch" checked={s.voiceChat} disabled={!s.voiceReady && !s.voiceChat} onChange={e => toggle('voiceChat', e.target.checked)} /><span /></span>
 						</div>
@@ -72,6 +74,9 @@ export default function AdminPage() {
 							: <>Voice chat can’t be switched on yet: the server is missing <b>{(s.missing?.voice || []).join(', ') || 'the LiveKit settings'}</b>. Add them in Vercel → Settings → Environment Variables (tick Production), then Redeploy.</>}</p>
 					</>
 				)}
+				<div className="section-title">Game rules</div>
+				<p className="hint" style={{ marginTop: 0 }}>rules.MD leaves these points for the players to agree. Each game keeps the rules it started with.</p>
+				{s && <RulesForm rules={s.rules} save={saveRules} />}
 				{s?.missing && (s.missing.alerts.length > 0 || s.missing.dailyJob.length > 0) && (
 					<div className="error-banner" role="status" style={{ marginTop: 14 }}>
 						Server settings missing:{s.missing.alerts.length > 0 && <> phone alerts need <b>{s.missing.alerts.join(', ')}</b>;</>}
@@ -81,6 +86,47 @@ export default function AdminPage() {
 				{saved && <div className="ok-banner" role="status">{saved}</div>}
 				<ErrorBanner>{error}</ErrorBanner>
 			</main>
+		</div>
+	);
+}
+
+function Choice<T extends string>({ id, label, value, options, onPick, note }: { id: string; label: string; value: T; options: [T, string][]; onPick: (v: T) => void; note: string }) {
+	return (
+		<div className="rule-opt">
+			<div className="rule-label" id={id}>{label}</div>
+			<div className="segmented" role="radiogroup" aria-labelledby={id}>
+				{options.map(([v, l]) => <label key={v}><input type="radio" name={id} checked={value === v} onChange={() => onPick(v)} /><span>{l}</span></label>)}
+			</div>
+			<p className="hint">{note}</p>
+		</div>
+	);
+}
+
+function RulesForm({ rules, save }: { rules: RuleOptions; save: (p: Partial<RuleOptions>, msg: string) => void }) {
+	const cut = rules.superCutBelow === null ? 'none' : String(rules.superCutBelow);
+	return (
+		<div className="rules-form">
+			<Choice id="r-cut" label="Super: cutting needs a low hand" value={cut} options={[['60', 'Below 60'], ['none', 'No limit']]}
+				onPick={v => save({ superCutBelow: v === 'none' ? null : Number(v) }, v === 'none' ? 'Super cuts have no points limit' : 'Super cuts need a hand below 60')}
+				note="In PicknPlay Super, the player cutting must have fewer than 60 points left in hand after playing the 7 (rules.MD: “below 60 card value”). Classic has no limit." />
+			<Choice id="r-pen" label="Facing a draw penalty you can’t answer" value={rules.penaltyResponse} options={[['draw', 'Draw, turn ends'], ['drawThenPlay', 'Draw, then play']]}
+				onPick={v => save({ penaltyResponse: v }, v === 'draw' ? 'Drawing a penalty ends the turn' : 'After drawing a penalty the player plays on')}
+				note="Answering with a matching penalty card or an allowed Ace is always possible." />
+			<Choice id="r-deck" label="When the draw pile runs out" value={rules.emptyDeck} options={[['reshuffle', 'Reshuffle discards'], ['count', 'End & count']]}
+				onPick={v => save({ emptyDeck: v }, v === 'reshuffle' ? 'Empty draw pile: reshuffle the discards' : 'Empty draw pile: the game ends and hands are counted')}
+				note="Reshuffle keeps the top discard in place and shuffles the rest into a new draw pile." />
+			<Choice id="r-start" label="Opening discard" value={rules.startDiscard} options={[['nonSpecial', 'Plain card'], ['any', 'Any card']]}
+				onPick={v => save({ startDiscard: v }, v === 'nonSpecial' ? 'The opening discard is always a plain card' : 'Any card can open the discard pile')}
+				note="Plain card: a special card (2, 3, Joker, 8, Jack, Ace or the cut 7) turned up first is put back and another is turned. A special opening card has no effect." />
+			<Choice id="r-tie" label="Tie for the lowest hand at a cut" value={rules.cutTie} options={[['share', 'Share the win'], ['cutter', 'Cutter wins']]}
+				onPick={v => save({ cutTie: v }, v === 'share' ? 'Tied lowest hands share the win' : 'The cutter wins a tie')}
+				note="Players with equal totals share their place." />
+			<Choice id="r-jpts" label="Joker value when hands are counted" value={String(rules.jokerPoints)} options={[['0', '0'], ['20', '20'], ['50', '50'], ['60', '60']]}
+				onPick={v => save({ jokerPoints: Number(v) }, `Jokers count ${v} points`)}
+				note="rules.MD gives Jokers no point value." />
+			<Choice id="r-jon" label="A Joker can be played on" value={rules.jokerOnAnything ? 'any' : 'joker'} options={[['any', 'Any card'], ['joker', 'Only a Joker']]}
+				onPick={v => save({ jokerOnAnything: v === 'any' }, v === 'any' ? 'Jokers can be played on any card' : 'Jokers can only be played on a Joker')}
+				note="rules.MD doesn’t say. A Joker keeps the suit that was being followed." />
 		</div>
 	);
 }

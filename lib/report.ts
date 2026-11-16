@@ -1,7 +1,7 @@
 'use client';
 // Sends browser errors to /api/client-error so they appear in the server (Vercel) logs.
 let sent = 0;
-const RELOAD_KEY = 'rummy10.chunkReload';
+const RELOAD_KEY = 'picknplay.chunkReload';
 
 /** True for "this phone is running an older copy of the app and a file is gone" errors. */
 export const isChunkError = (e: unknown) =>
