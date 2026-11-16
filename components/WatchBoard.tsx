@@ -36,6 +36,7 @@ export default function WatchBoard({ data, onChanged }: { data: GameData; onChan
 					<div className="pilewrap"><div className="pile"><img src={CARD_BACK} alt="" /><span className="count">{v.deckCount}</span></div><span className="pile-label">Draw pile</span></div>
 					<div className="pilewrap"><div className="pile cutter-pile"><img src={cardSrc(v.cutter)} alt={`Cutter: ${cardLabel(v.cutter)}`} /></div><span className="pile-label">Cutter · {v.cutSeven.replace(/([SHDC])$/, m => SUIT_SYMBOLS[m as 'S'])} cuts</span></div>
 				</div>
+				{v.open && !v.penalty && <p className="penalty-banner" style={{ background: "var(--mint)" }}>The A♠ cooled a penalty: any card can be played next</p>}
 				{v.penalty && <p className="penalty-banner">Draw {v.penalty.amount} waiting for {v.turn ? nameOf(v.turn) : 'the next player'}</p>}
 				<div className="watch-players">
 					{v.order.map(id => {

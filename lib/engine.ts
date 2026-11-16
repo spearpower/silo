@@ -55,6 +55,7 @@ export interface GameState {
 	cutter: Card;                  // its suit names the 7 that can cut; stays visible all game
 	suit: Suit;                    // suit to follow
 	penalty: Penalty | null;       // draw penalty waiting for the player on turn
+	open?: boolean;                // the A♠ just cancelled a penalty: the next player may play any card
 	players: Record<string, PlayerState>;
 	turn: number | null;
 	step: Step;
@@ -92,7 +93,7 @@ function event(s: GameState, e: NewEvent) {
 	if (s.events.length > EVENTS_KEPT) s.events.splice(0, s.events.length - EVENTS_KEPT);
 }
 
-export const tableOf = (s: GameState): Table => ({ variant: s.variant, rules: s.rules, top: s.discard[0] ?? null, suit: s.suit, penalty: s.penalty });
+export const tableOf = (s: GameState): Table => ({ variant: s.variant, rules: s.rules, top: s.discard[0] ?? null, suit: s.suit, penalty: s.penalty, open: !!s.open });
 export const pointsOf = (s: GameState, hand: Card[]) => handPoints(hand, s.variant, s.rules.jokerPoints);
 
 /** The player `k` seats away in the direction of play. */
@@ -197,12 +198,13 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 	if (!canPlay(t, card)) {
 		if (s.penalty) {
 			const k = s.penalty.kind;
-			throw new GameError(k === '2' ? `Play a 2 or an Ace, or draw ${s.penalty.amount}` : `Play a ${penaltyName(k)} or the Black Spade Ace, or draw ${s.penalty.amount}`);
+			throw new GameError(`Play a ${penaltyName(k)} or the Ace of Spades, or draw ${s.penalty.amount}`);
 		}
 		if (rankOf(card) === 'A') throw new GameError('An Ace can’t be played on a 2');
 		throw new GameError(`Play a ${SUIT_NAMES[s.suit]} card or a matching rank`);
 	}
-	const isAce = rankOf(card) === 'A';
+	const cancelling = !!s.penalty && cancels(card, s.penalty);   // the A♠ stops a penalty and names no suit
+	const isAce = rankOf(card) === 'A' && !cancelling;              // an Ace that asks for a suit
 	if (isAce && !isSuit(suit)) throw new GameError('Name a suit for your Ace');
 
 	const remaining = p.hand.filter(c => c !== card);
@@ -222,17 +224,19 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 	s.moves += 1;
 	s.stuck = 0;
 	s.drawn = null;
+	s.open = false;
 	if (isAce) s.suit = suit!;
 	else if (!isJoker(card)) s.suit = suitOf(card)!;          // a Joker keeps the suit being followed
 	event(s, { t: 'play', by: me, card, ...(isAce ? { suit } : {}), ...(cutting ? { cut: true } : {}) });
-	log(s, `${who(me)} played ${cardShort(card)}${isAce ? ` · calls ${SUIT_NAMES[suit!]}` : ''}`);
+	log(s, `${who(me)} played ${cardShort(card)}${isAce ? ` · asks for ${SUIT_NAMES[suit!]}` : ''}`);
 
 	// Penalties: pass it on (matching card), cancel it (allowed Ace) or start one
 	const pen = penaltyOf(card, s.variant);
-	if (s.penalty && isAce && cancels(card, s.penalty)) {
-		event(s, { t: 'cancel', by: me, kind: s.penalty.kind, amount: s.penalty.amount });
-		log(s, `${who(me)} cancelled the draw ${s.penalty.amount}`);
+	if (cancelling) {
+		event(s, { t: 'cancel', by: me, kind: s.penalty!.kind, amount: s.penalty!.amount });
+		log(s, `${who(me)} cancelled the draw ${s.penalty!.amount} · any card can follow`);
 		s.penalty = null;
+		s.open = true;
 	} else if (pen) {
 		s.penalty = { kind: pen.kind, amount: (s.penalty?.amount || 0) + pen.amount };
 	}
@@ -417,6 +421,7 @@ export interface GameView {
 	cutBelow: number | null;
 	discard: Card[];                  // top few (everyone saw them played)
 	suit: Suit;
+	open: boolean;                    // after a cancel: any card may be played
 	penalty: Penalty | null;
 	moves: number;
 	seq: number;
@@ -446,6 +451,7 @@ export function viewFor(s: GameState, me: number): GameView {
 		cutBelow: cutThreshold(s.variant, s.rules),
 		discard: s.discard.slice(0, PEEK_CARDS),
 		suit: s.suit,
+		open: !!s.open,
 		penalty: s.penalty,
 		moves: s.moves,
 		seq: s.seq,

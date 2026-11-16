@@ -6,8 +6,8 @@ import { BLACK_SPADE_ACE, Card, isJoker, rankOf, Suit, suitOf, Variant } from '.
 export interface VariantInfo { id: Variant; name: string; short: string; blurb: string; deck: number }
 
 export const VARIANTS: VariantInfo[] = [
-	{ id: 'classic', name: 'PicknPlay Classic', short: 'Classic', deck: 52, blurb: 'The classic game with 52 cards and no Jokers. Hit the next player with a 2, and stop a 2 with any Ace.' },
-	{ id: 'super', name: 'PicknPlay Super', short: 'Super', deck: 54, blurb: 'Adds two Jokers. A 2 makes the next player draw 2, a 3 draws 3 and a Joker draws 5. Only the Ace of Spades stops a 3 or a Joker.' },
+	{ id: 'classic', name: 'PicknPlay Classic', short: 'Classic', deck: 52, blurb: 'The classic game with 52 cards and no Jokers. Hit the next player with a 2. Only the Ace of Spades can stop it.' },
+	{ id: 'super', name: 'PicknPlay Super', short: 'Super', deck: 54, blurb: 'Adds two Jokers. A 2 makes the next player draw 2, a 3 draws 3 and a Joker draws 5. Only the Ace of Spades stops any of them.' },
 ];
 export const variantInfo = (v: unknown): VariantInfo => VARIANTS.find(x => x.id === v) || VARIANTS[0];
 export const asVariant = (x: unknown): Variant => (x === 'super' ? 'super' : 'classic');
@@ -84,10 +84,12 @@ export function penaltyOf(c: Card, variant: Variant): { kind: PenaltyKind; amoun
 	return null;
 }
 
-/** Cool-off: any Ace cancels a 2 penalty; only the Black Spade Ace cancels a 3 or Joker penalty (Super). */
-export function cancels(c: Card, p: Penalty): boolean {
-	if (rankOf(c) !== 'A') return false;
-	return p.kind === '2' ? true : c === BLACK_SPADE_ACE;
+/**
+ * Cool-off: only the Ace of Spades (A♠) cancels a draw penalty, whether it was made with 2s, 3s or Jokers.
+ * Cancelling doesn't name a suit: the next player may play any card.
+ */
+export function cancels(c: Card, _p: Penalty): boolean {
+	return c === BLACK_SPADE_ACE;
 }
 
 export const penaltyName = (k: PenaltyKind) => (k === 'X' ? 'Joker' : k);
@@ -108,11 +110,13 @@ export interface Table {
 	top: Card | null;          // top of the discard pile
 	suit: Suit | null;         // suit to follow (the top card's, or the one named with an Ace)
 	penalty: Penalty | null;   // draw penalty waiting for the player on turn
+	open?: boolean;            // a penalty was just cancelled: any card may be played
 }
 
 /**
  * May `c` go on the discard pile now?
- *  - A penalty is waiting: only a matching penalty card (passes it on) or an allowed Ace (cancels it).
+ *  - A penalty is waiting: only a matching penalty card (passes it on) or the A♠ (cancels it).
+ *  - Right after a cancel (open table): any card.
  *  - An Ace goes on anything except a 2.
  *  - A Joker (Super) goes on anything (rule option), and keeps the suit that was being followed.
  *  - Otherwise: same suit as the suit to follow, or same rank as the top card.
@@ -123,7 +127,7 @@ export function canPlay(t: Table, c: Card): boolean {
 		if (p && p.kind === t.penalty.kind) return true;
 		return cancels(c, t.penalty);
 	}
-	if (!t.top) return true;
+	if (!t.top || t.open) return true;
 	if (isJoker(c)) return t.rules.jokerOnAnything || isJoker(t.top);
 	if (rankOf(c) === 'A') return rankOf(t.top) !== '2';
 	if (t.suit && suitOf(c) === t.suit) return true;

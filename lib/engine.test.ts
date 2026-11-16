@@ -106,7 +106,7 @@ describe('2: draw two (both variants)', () => {
 		apply(s, 1, { type: 'play', card: '2H' });
 		expect(s.penalty).toEqual({ kind: '2', amount: 2 });
 		expect(s.turn).toBe(2);
-		expect(() => apply(s, 2, { type: 'play', card: '5S' })).toThrow(/Play a 2 or an Ace/);
+		expect(() => apply(s, 2, { type: 'play', card: '5S' })).toThrow(/Play a 2 or the Ace of Spades/);
 		apply(s, 2, { type: 'draw' });
 		expect(hand(s, 2)).toHaveLength(4);
 		expect(s.penalty).toBeNull();
@@ -123,16 +123,39 @@ describe('2: draw two (both variants)', () => {
 		expect(hand(s, 4)).toHaveLength(8);
 	});
 
-	it('any Ace cancels a 2 penalty (and names a suit)', () => {
-		for (const ace of ['AH', 'AD', 'AC', 'AS']) {
+	it('only the Ace of Spades cancels a 2 penalty; other Aces can’t answer it', () => {
+		for (const ace of ['AH', 'AD', 'AC']) {
 			const s = table({ hands: [['2H', '4C'], [ace, '6S'], ['7D']], top: '9H' });
 			apply(s, 1, { type: 'play', card: '2H' });
-			apply(s, 2, { type: 'play', card: ace, suit: 'D' });
-			expect(s.penalty).toBeNull();
-			expect(s.suit).toBe('D');
-			expect(s.turn).toBe(3);
-			expect(hand(s, 2)).toEqual(['6S']);
+			expect(() => apply(s, 2, { type: 'play', card: ace, suit: 'D' })).toThrow(/Ace of Spades/);
 		}
+		const s = table({ hands: [['2H', '4C'], ['AS', '6S'], ['7D', 'KC']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'play', card: 'AS' });           // no suit needed: cancelling doesn't ask
+		expect(s.penalty).toBeNull();
+		expect(s.open).toBe(true);
+		expect(s.turn).toBe(3);
+		expect(hand(s, 2)).toEqual(['6S']);
+		expect(s.events.some(e => e.t === 'play' && e.card === 'AS' && 'suit' in e)).toBe(false);
+	});
+
+	it('after the A♠ cancels, the next player may play any card; then normal matching resumes', () => {
+		const s = table({ hands: [['2H', '4C'], ['AS', '6S'], ['7D', 'KC'], ['9D', '5H']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '2H' });
+		apply(s, 2, { type: 'play', card: 'AS', suit: 'H' });   // a suit sent along is ignored
+		expect(viewFor(s, 3).playable.sort()).toEqual(['7D', 'KC']);
+		apply(s, 3, { type: 'play', card: 'KC' });               // a club on the A♠: fine
+		expect(s.open).toBe(false);
+		expect(s.suit).toBe('C');
+		expect(() => apply(s, 4, { type: 'play', card: '5H' })).toThrow();
+	});
+
+	it('an Ace played without a penalty still names a suit', () => {
+		const s = table({ hands: [['AS', '4C'], ['5D', '6S'], ['7D']], top: '9H' });
+		expect(() => apply(s, 1, { type: 'play', card: 'AS' })).toThrow(/Name a suit/);
+		apply(s, 1, { type: 'play', card: 'AS', suit: 'D' });
+		expect(s.suit).toBe('D');
+		expect(s.open).toBe(false);
 	});
 
 	it('rule option drawThenPlay: after drawing the penalty the same player plays on', () => {
@@ -167,22 +190,23 @@ describe('PicknPlay Super penalties', () => {
 		expect(hand(s, 3)).toHaveLength(11);
 	});
 
-	it('only the Black Spade Ace cancels a 3 or Joker penalty', () => {
+	it('only the Ace of Spades cancels a 3 or Joker penalty', () => {
 		for (const first of ['3H', 'XR']) {
 			const s = table({ variant: 'super', hands: [[first, '4C'], ['AH', 'AS', '6S'], ['7D']], top: '9H' });
 			apply(s, 1, { type: 'play', card: first });
-			expect(() => apply(s, 2, { type: 'play', card: 'AH', suit: 'H' })).toThrow(/Black Spade Ace/);
-			apply(s, 2, { type: 'play', card: 'AS', suit: 'C' });
+			expect(() => apply(s, 2, { type: 'play', card: 'AH', suit: 'H' })).toThrow(/Ace of Spades/);
+			apply(s, 2, { type: 'play', card: 'AS' });
 			expect(s.penalty).toBeNull();
-			expect(s.suit).toBe('C');
+			expect(s.open).toBe(true);
 			expect(s.turn).toBe(3);
 		}
 	});
 
-	it('any Ace still cancels a 2 penalty in Super', () => {
-		const s = table({ variant: 'super', hands: [['2H', '4C'], ['AD', '6S'], ['7D']], top: '9H' });
+	it('in Super too, only the A♠ cancels a 2 penalty', () => {
+		const s = table({ variant: 'super', hands: [['2H', '4C'], ['AD', 'AS', '6S'], ['7D']], top: '9H' });
 		apply(s, 1, { type: 'play', card: '2H' });
-		apply(s, 2, { type: 'play', card: 'AD', suit: 'S' });
+		expect(() => apply(s, 2, { type: 'play', card: 'AD', suit: 'S' })).toThrow(/Ace of Spades/);
+		apply(s, 2, { type: 'play', card: 'AS' });
 		expect(s.penalty).toBeNull();
 	});
 

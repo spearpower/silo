@@ -54,6 +54,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	const bubbleSeq = useRef(0);
 	const seenSeq = useRef<number | null>(null);
 	const prevCounts = useRef<Record<number, number>>({});
+	// "Asks for ♥": a big suit badge on the asking player's seat (or my hand) for 1.5 s, with a chime and a glow
+	const [calls, setCalls] = useState<{ key: number; suit: Suit; x: number; y: number }[]>([]);
+	const callSeq = useRef(0);
+	const showCall = useCallback((pid: number, suit: Suit) => {
+		const el = document.querySelector<HTMLElement>(`[data-seat="${pid}"]`);
+		playSound('suit');
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const key = ++callSeq.current;
+		setCalls(c => [...c.slice(-2), { key, suit, x: r.left + r.width / 2, y: r.top + Math.min(r.height / 2, 70) }]);
+		el.classList.add('calling', `call-${suit}`);
+		setTimeout(() => { el.classList.remove('calling', `call-${suit}`); setCalls(c => c.filter(x => x.key !== key)); }, 1500);
+	}, []);
 	const bubble = useCallback((text: string, kind: BubbleKind, ms = 2600) => {
 		const bid = ++bubbleSeq.current;
 		setBubbles(b => [...b.slice(-2), { id: bid, text, kind }]);
@@ -104,7 +117,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 						setTimeout(() => { fly(`[data-seat="${e.by}"]`, '[data-drop="discard"]', cardSrc(e.card), 460); playSound('play'); }, at);
 						delay += 380;
 					}
-					if (e.suit && e.by !== me) setTimeout(() => { bubble(`${who(e.by)} called ${SUIT_SYMBOLS[e.suit!]} ${SUIT_NAMES[e.suit!]}`, 'info', 2600); playSound('suit'); }, at + 300);
+					if (e.suit) setTimeout(() => { showCall(e.by, e.suit!); if (e.by !== me) bubble(`${who(e.by)} asks for ${SUIT_SYMBOLS[e.suit!]} ${SUIT_NAMES[e.suit!]}`, 'info', 2600); }, at + (e.by === me ? 0 : 300));
 					if (e.cut) setTimeout(() => { bubble(`✂️ ${who(e.by)} cut with ${suitSym(e.card)}!`, 'round', 3600); playSound('cut'); haptic([40, 30, 80]); }, at + 200);
 					break;
 				case 'draw':
@@ -121,7 +134,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 						if (e.target === me) haptic([60, 40, 60]);
 					}, at + 150);
 					break;
-				case 'cancel': setTimeout(() => { bubble(`🛡️ ${who(e.by)} cancelled the draw ${e.amount}`, 'phase', 2800); playSound('cancel'); }, at + 150); break;
+				case 'cancel': setTimeout(() => { bubble(`🛡️ ${who(e.by)} cooled the draw ${e.amount} with the A♠ · any card can follow`, 'phase', 2800); playSound('cancel'); }, at + 150); break;
 				case 'skip': setTimeout(() => { bubble(e.target === me ? `${who(e.by)} skipped you` : `${who(e.target)} is skipped`, 'skip', 2400); playSound('skip'); }, at + 150); break;
 				case 'reverse': setTimeout(() => { bubble('🔄 Direction reversed', 'info', 2200); playSound('reverse'); }, at + 150); break;
 				case 'again': if (e.by !== me) setTimeout(() => bubble(`${who(e.by)} plays again`, 'info', 2000), at + 150); break;
@@ -147,7 +160,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 				playSound(iWon ? 'win' : 'lose'); haptic(iWon ? [60, 40, 60, 40, 120] : 60); setParty(iWon ? 'win' : 'cut');
 			}, delay + (f.how === 'cut' ? 900 : 200));
 		}
-	}, [serverView, me, names, bubble]);
+	}, [serverView, me, names, bubble, showCall]);
 
 	useEffect(() => { if (!party) return; const t = setTimeout(() => setParty(null), 4200); return () => clearTimeout(t); }, [party]);
 
@@ -277,7 +290,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 
 	// ----- actions -----
 	const playCard = (card: string) => {
-		if (rankOf(card) === 'A') { setChoose({ card, kind: 'ace' }); return; }
+		if (rankOf(card) === 'A' && !(pen && card === 'AS')) { setChoose({ card, kind: 'ace' }); return; }
 		if (card === view.cutSeven) { setChoose({ card, kind: 'cut' }); return; }
 		fly(`[data-card="${card}"]`, '[data-drop="discard"]', cardSrc(card));
 		send({ type: 'play', card });
@@ -288,7 +301,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		if (!view.playable.includes(card)) {
 			playSound('error');
 			if (view.step === 'drawn') return say('You can only play the card you just drew, or keep it');
-			if (pen) return say(pen.kind === '2' ? `Only a 2 or an Ace can answer this. Or draw ${pen.amount}.` : `Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
+			if (pen) return say(`Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
 			if (rankOf(card) === 'A') return say('An Ace can’t go on a 2');
 			return say(`That one doesn’t fit. Play ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? (isJoker(top) ? 'Joker' : rankOf(top)) : ''}`);
 		}
@@ -361,10 +374,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 					</div>
 				</div>
 				<div className="table-chips">
-					<span className={`chip suit s-${view.suit}`} title="Suit to follow">Follow <b>{SUIT_SYMBOLS[view.suit]}</b> {SUIT_NAMES[view.suit]}</span>
+					{view.open ? <span className="chip suit open" title="The A♠ cooled a penalty">Any card goes</span>
+						: <span className={`chip suit s-${view.suit}`} title="Suit to follow">Follow <b>{SUIT_SYMBOLS[view.suit]}</b> {SUIT_NAMES[view.suit]}</span>}
 					<span className="chip cutter" title={`Cutter card: ${cardLabel(view.cutter)}${view.cutterInDeck ? '' : ' (drawn)'}`}>✂️ <b>{suitSym(view.cutSeven)}</b> cuts{view.cutBelow !== null ? ` · under ${view.cutBelow}` : ''}</span>
 					<span className="chip dir" title="Direction of play">{view.direction === 1 ? '↻' : '↺'} {view.direction === 1 ? 'Clockwise' : 'Reversed'}</span>
-					{pen && <span className="chip pen">Draw {pen.amount} · {penaltyName(pen.kind)}{pen.kind === '2' ? ' (any Ace stops it)' : ' (A♠ stops it)'}</span>}
+					{pen && <span className="chip pen">Draw {pen.amount} · {penaltyName(pen.kind)} (only the A♠ stops it)</span>}
 				</div>
 				{lastLog && <div className="footnote" style={{ margin: 0 }}>{lastLog}</div>}
 			</section>
@@ -428,7 +442,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 				</>
 			)}
 			{choose?.kind === 'ace' && (
-				<SuitSheet card={choose.card} cancelling={!!pen} onClose={() => setChoose(null)} onPick={suit => {
+				<SuitSheet card={choose.card} onClose={() => setChoose(null)} onPick={suit => {
 					setChoose(null);
 					fly(`[data-card="${choose.card}"]`, '[data-drop="discard"]', cardSrc(choose.card));
 					send({ type: 'play', card: choose.card, suit });
@@ -444,6 +458,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 					}} />
 			)}
 			{peek && <DiscardSpread peek={peek} onClose={() => setPeek(null)} />}
+			{calls.map(c => (
+				<div key={c.key} className={`suit-call s-${c.suit}`} style={{ left: c.x, top: c.y }} role="status" aria-label={`Asks for ${SUIT_NAMES[c.suit]}`}>
+					<span className="sym">{SUIT_SYMBOLS[c.suit]}</span><span className="nm">{SUIT_NAMES[c.suit]}</span>
+				</div>
+			))}
 			{floats.map(f => <span key={f.key} className="float-emoji" style={{ left: f.x, top: f.y }} aria-hidden="true">{f.emoji}</span>)}
 			<Bubbles items={bubbles} allTop={!!view.finished} />
 			{party && <Confetti big={party === 'win'} />}
@@ -459,13 +478,13 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	);
 }
 
-function SuitSheet({ card, cancelling, onPick, onClose }: { card: string; cancelling: boolean; onPick: (s: Suit) => void; onClose: () => void }) {
+function SuitSheet({ card, onPick, onClose }: { card: string; onPick: (s: Suit) => void; onClose: () => void }) {
 	return (
 		<div className="sheet-backdrop" onClick={onClose}>
 			<div className="sheet" role="dialog" aria-modal="true" aria-label="Name a suit" onClick={e => e.stopPropagation()}>
 				<div className="grabber" />
-				<h2>{cardShort(card)}: name the suit</h2>
-				<p className="subtitle center">{cancelling ? 'Your Ace cancels the draw penalty. ' : ''}The next player must follow the suit you name.</p>
+				<h2>{cardShort(card)}: which suit do you ask for?</h2>
+				<p className="subtitle center">The next player must follow the suit you ask for.</p>
 				<div className="suit-grid">
 					{SUITS.map(s => (
 						<button key={s} type="button" className={`suit-btn s-${s}`} onClick={() => onPick(s)} aria-label={SUIT_NAMES[s]}>
@@ -644,7 +663,9 @@ function predict(v: GameView, me: number, a: Action): GameView | null {
 			mine.handCount = n.hand.length;
 			n.playable = [];
 			n.drawn = null;
-			if (a.suit) n.suit = a.suit;
+			n.open = !!n.penalty && a.card === 'AS';
+			if (n.open) n.penalty = null;
+			else if (a.suit) n.suit = a.suit;
 			else if (!isJoker(a.card)) n.suit = a.card.slice(-1) as Suit;
 			return n;
 		}

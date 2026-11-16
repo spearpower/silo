@@ -56,7 +56,8 @@ the lowest hand-point total wins.
                                       play it to pass the penalty to the
                                       following player. The draw penalty
                                       accumulates by 2 for each 2 played.
-                                      Any Ace may cancel a 2 penalty.
+                                      Only the Ace of Spades may cancel
+                                      a 2 penalty.
 
   **8**                               In a two-player game, the player
                                       who plays an 8 gets another play.
@@ -76,9 +77,12 @@ the lowest hand-point total wins.
                                       reversed.
 
   **Ace**                             May be played on any card except a
-                                      2. The player names the suit for
-                                      the next turn. An Ace also cancels
-                                      a 2 penalty.
+                                      2. The player asks for the suit
+                                      for the next turn. The Ace of
+                                      Spades also cancels a 2 penalty;
+                                      when it does, it asks for no suit
+                                      and the next player may play any
+                                      card.
   -----------------------------------------------------------------------
 
 ### 2.4 Ending the game by cutting
@@ -141,8 +145,8 @@ Use the same turn sequence and matching rules as PicknPlay Classic:
                                       A player holding another 2 may play
                                       it to pass the penalty onward. The
                                       penalty accumulates by 2 for each 2
-                                      played. **Any Ace** may cancel a 2
-                                      penalty.
+                                      played. **Only the Ace of
+                                      Spades** may cancel a 2 penalty.
 
   **3**                               The next player must draw 3 cards.
                                       A player holding another 3 may play
@@ -177,20 +181,23 @@ Use the same turn sequence and matching rules as PicknPlay Classic:
                                       reversed.
 
   **Ace**                             May be played on any card except a
-                                      2. The player names the suit for
-                                      the next turn. Any Ace can cancel a
-                                      2 penalty.
+                                      2. The player asks for the suit
+                                      for the next turn. Only the Ace of
+                                      Spades cancels a penalty.
 
   **Black Spade Ace**                 Has a special value of 60 points
-                                      when scoring a cut. It can cancel a
-                                      penalty caused by a 2, 3, or Joker.
+                                      when scoring a cut. It is the only
+                                      card that cancels a penalty caused
+                                      by a 2, 3, or Joker. A cancelling
+                                      Black Spade Ace asks for no suit:
+                                      the next player may play any card.
   -----------------------------------------------------------------------
 
 **Penalty stacking:** A matching penalty card passes the accumulated
 draw penalty to the next player. For example, two 3s create a 6-card
-penalty, and two Jokers create a 10-card penalty. A permitted cool-off
-Ace cancels the applicable accumulated penalty, so the player does not
-draw those cards.
+penalty, and two Jokers create a 10-card penalty. The Black Spade Ace
+cancels the whole accumulated penalty, so the player does not draw those
+cards. It does not ask for a suit, so the next player may play any card.
 
 ### 3.4 Ending the game by cutting
 
@@ -241,7 +248,7 @@ wins.
 
   Penalty for a Joker     Not used                Draw 5
 
-  Cool-off for a 2        Any Ace                 Any Ace
+  Cool-off for a 2        Black Spade Ace only    Black Spade Ace only
 
   Cool-off for a 3        Not used                Black Spade Ace only
 
@@ -265,9 +272,10 @@ wins.
     points left in their hands.
 -   **Lowest hand value wins a cut.** Count the points of every card
     remaining in each player's hand.
--   **Super cool-off rules are specific to the penalty.** Any Ace
-    cancels a 2 penalty, but only the Black Spade Ace cancels a 3 or
-    Joker penalty.
+-   **Only the Black Spade Ace cools off a penalty.** In both variants
+    it is the only card that cancels a 2, 3 or Joker penalty. Other Aces
+    cannot answer a penalty. After the cool-off no suit is asked for, so
+    the next player may play any card.
 
 ### Items to agree before play
 

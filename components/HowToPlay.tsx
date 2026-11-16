@@ -37,14 +37,14 @@ export default function HowToPlay({ variant }: { variant?: Variant }) {
 
 			<h3>Special cards</h3>
 			<table className="pts"><tbody>
-				<tr><td><b>2</b></td><td>The next player draws 2, unless they play another 2 and pass it on (it grows by 2 each time). <b>Any Ace</b> cancels it.</td></tr>
-				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>Black Spade Ace (A♠)</b> cancels it.</td></tr>}
+				<tr><td><b>2</b></td><td>The next player draws 2, unless they play another 2 and pass it on (it grows by 2 each time). Only the <b>Ace of Spades (A♠)</b> cancels it.</td></tr>
+				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>A♠</b> cancels it.</td></tr>}
 				{sup && <tr><td><b>Joker</b></td><td>The next player draws 5, or passes it on with the other Joker (+5). Only the <b>A♠</b> cancels it. {rules.jokerOnAnything ? 'A Joker can go on any card and keeps the suit being followed.' : 'A Joker can only go on a Joker.'}</td></tr>}
 				<tr><td><b>8</b></td><td>With 2 players: play again. With more: the next player is <b>skipped</b>.</td></tr>
 				<tr><td><b>Jack</b></td><td>With 2 players: play again. With more: the <b>direction of play reverses</b>.</td></tr>
-				<tr><td><b>Ace</b></td><td>Goes on any card except a 2. You <b>name the suit</b> the next player must follow. It also cancels a 2 penalty.</td></tr>
+				<tr><td><b>Ace</b></td><td>Goes on any card except a 2, and you <b>ask for a suit</b> the next player must follow. The <b>A♠</b> is special: it also cools off any draw penalty. When it does, you don’t ask for a suit, so the next player can play any card.</td></tr>
 			</tbody></table>
-			<p className="small">Facing a penalty you can only pass it on, cancel it with an allowed Ace, or <b>draw the whole amount</b>{rules.penaltyResponse === 'draw' ? ', and that ends your turn' : ' and then play on'}.</p>
+			<p className="small">Facing a penalty you can only pass it on, cool it off with the A♠, or <b>draw the whole amount</b>{rules.penaltyResponse === 'draw' ? ', and that ends your turn' : ' and then play on'}.</p>
 
 			<h3>Cutting</h3>
 			<p>Play the <b>7 of the cutter’s suit</b> and tap <b>Cut</b> to end the game at once. Everyone adds up the cards left in their hand and the <b>lowest total wins</b>. Careful: the cutter can lose!

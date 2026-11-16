@@ -58,7 +58,7 @@ export async function alertTurn(gameId: number): Promise<void> {
 	if (!t) return;
 	const pen = t.penalty;
 	const body = pen
-		? `Draw ${pen.amount} is waiting for you in game ${gameId}. Answer it with ${pen.kind === '2' ? 'a 2 or an Ace' : pen.kind === '3' ? 'a 3 or the A♠' : 'a Joker or the A♠'}, or draw.`
+		? `Draw ${pen.amount} is waiting for you in game ${gameId}. Answer it with ${pen.kind === '2' ? 'a 2' : pen.kind === '3' ? 'a 3' : 'a Joker'} or the A♠, or draw.`
 		: `It’s your turn in game ${gameId}.`;
 	await notifyUsers([t.user_id], { title: pen ? `Draw ${pen.amount}! Your turn` : 'Your turn', body, url: `/game/${gameId}`, tag: `turn-${gameId}` });
 }

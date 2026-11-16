@@ -17,10 +17,10 @@ The game rules are specified in **[rules/rules.MD](rules/rules.MD)**, the author
 | Cards dealt | 7 each | 7 each |
 | Penalty cards | 2 (draw 2) | 2 (draw 2), 3 (draw 3), Joker (draw 5) |
 | Stacking | each 2 adds 2 | each matching card adds its amount |
-| Cancel ("cool-off") | any Ace cancels a 2 | any Ace cancels a 2; only the **Black Spade Ace** cancels a 3 or Joker |
+| Cancel ("cool-off") | only the **Ace of Spades** cancels a 2 | only the **Ace of Spades** cancels a 2, 3 or Joker penalty |
 | 8 | 2 players: play again · 3+: next player skipped | same |
 | Jack | 2 players: play again · 3+: direction reverses | same |
-| Ace | on anything but a 2; names the suit to follow | same |
+| Ace | on anything but a 2; asks for the suit to follow (a cancelling A♠ asks for nothing: the next player may play any card) | same |
 | Cutting | the 7 of the cutter card's suit; lowest hand wins | same, and the cutter's hand must be below 60 |
 | A♠ value | 15 | 60 |
 
@@ -35,7 +35,7 @@ started with, so changing them never affects a game in progress. Defaults:
 | Open point | Default | Alternative |
 |---|---|---|
 | Super cut threshold ("below 60") | the player cutting must hold **< 60 points after playing the 7** | no limit |
-| Penalty response | stack a matching penalty card, cancel with an allowed Ace, or **draw the full amount; the turn ends** | draw, then play on |
+| Penalty response | stack a matching penalty card, cancel with the A♠, or **draw the full amount; the turn ends** | draw, then play on |
 | Empty draw pile | **reshuffle the discard pile**, keeping its top card | end the game and count hands |
 | Opening discard | top card of the draw pile; **special cards are re-buried** | any card (a special opening card has no effect) |
 | Tie for lowest at a cut | **tied players share the win** | the cutter wins the tie |
@@ -48,7 +48,7 @@ Other implementation choices (documented, not configurable):
 - The first player is chosen at random; play starts clockwise (seat order).
 - After drawing a card that fits, the player may play **that card** or keep it (pass). An unplayable
   drawn card ends the turn.
-- An Ace may be played on a 2 only to cancel a pending 2 penalty. A cancelling Ace also names a suit.
+- Only the A♠ answers a penalty with an Ace (Gerald's rule, 16 Nov 2026, replacing "any Ace cancels a 2"). A cancelling A♠ doesn't ask for a suit: the next player may play any card, and normal matching starts again from the card they play. An Ace played with no penalty waiting still asks for a suit.
 - Going out with any card (even a 2 or a cut 7) wins outright.
 - If nobody can play or draw for a whole round (all cards in hands), hands are counted ("blocked").
 - Playing the cut 7 is optional: the player chooses **Cut** or **Just play it**.
