@@ -59,10 +59,12 @@ export function botTurn(s: GameState, id: number): GameState {
 			continue;
 		}
 		let legal = p.hand.filter(c => canPlay(t, c));
-		if (s.penalty && legal.length) {
-			// Pass the penalty on if we can; cancelling with an Ace is the fallback
-			const stack = legal.filter(c => !cancels(c, s.penalty!) || penaltyOf(c, s.variant));
-			if (stack.length && level !== 'easy') legal = stack;
+		if (s.penalty && legal.length && level !== 'easy') {
+			// Best: pass the penalty on; then cool it with the A♠; then soften a 3 with its matching 2
+			const kind = s.penalty.kind;
+			const stack = legal.filter(c => penaltyOf(c, s.variant)?.kind === kind);
+			const cool = legal.filter(c => cancels(c, s.penalty!));
+			legal = stack.length ? stack : cool.length ? cool : legal;
 		}
 		if (!legal.length) { apply(s, id, { type: 'draw' }); continue; }
 		const seven = cutSeven(s.cutter)!;

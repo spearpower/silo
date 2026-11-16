@@ -2,8 +2,8 @@
 // Pure (no I/O): the server applies every move here inside a locked database transaction, and the
 // rules are unit-tested directly (lib/engine.test.ts). rules.MD is the specification.
 import { randomInt } from 'crypto';
-import { Card, cardShort, handPoints, isJoker, isSuit, newDeck, pick, rankOf, shuffle, Suit, suitOf, SUIT_NAMES, Variant } from './cards';
-import { canPlay, cancels, cutSeven, cutThreshold, isSpecial, Penalty, penaltyName, penaltyOf, RuleOptions, Table } from './rules';
+import { Card, cardShort, handPoints, isJoker, isSuit, newDeck, pick, rankOf, shuffle, Suit, suitOf, SUIT_NAMES, SUIT_SYMBOLS, Variant } from './cards';
+import { canPlay, cancels, softens, cutSeven, cutThreshold, isSpecial, Penalty, penaltyName, penaltyOf, RuleOptions, Table } from './rules';
 
 export class GameError extends Error {
 	constructor(message: string, public status = 400) { super(message); }
@@ -28,6 +28,7 @@ export type TableEvent = { n: number; by: number } & (
 	| { t: 'pass' }
 	| { t: 'penalty'; kind: Penalty['kind']; amount: number; target: number }
 	| { t: 'cancel'; kind: Penalty['kind']; amount: number }
+	| { t: 'soften'; card: Card; amount: number; count: number }
 	| { t: 'skip'; target: number }
 	| { t: 'reverse' }
 	| { t: 'again' }
@@ -198,13 +199,18 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 	if (!canPlay(t, card)) {
 		if (s.penalty) {
 			const k = s.penalty.kind;
-			throw new GameError(`Play a ${penaltyName(k)} or the Ace of Spades, or draw ${s.penalty.amount}`);
+			const top = s.discard[0];
+			const soft = k === '3' && s.variant === 'super' && top && rankOf(top) === '3' ? `, the 2${SUIT_SYMBOLS[suitOf(top)!]} (pick up ${s.penalty.amount - 2})` : '';
+			throw new GameError(`Play a ${penaltyName(k)}${soft} or the Ace of Spades, or draw ${s.penalty.amount}`);
 		}
 		if (rankOf(card) === 'A') throw new GameError('An Ace can’t be played on a 2');
 		const top = s.discard[0];
 		if (top && isJoker(top)) throw new GameError(`Play a ${top === 'XR' ? 'red (♥ ♦)' : 'black (♠ ♣)'} card on the ${top === 'XR' ? 'red' : 'black'} Joker`);
 		throw new GameError(`Play a ${SUIT_NAMES[s.suit]} card or a matching rank`);
 	}
+	// Super: the 2 of the 3's suit softens a 3 penalty: throw the 2, pick up the rest, turn over
+	if (s.penalty && softens(card, t)) return soften(s, p, card);
+
 	const cancelling = !!s.penalty && cancels(card, s.penalty);   // the A♠ stops a penalty and names no suit
 	const isAce = rankOf(card) === 'A' && !cancelling;              // an Ace that asks for a suit
 	if (isAce && !isSuit(suit)) throw new GameError('Name a suit for your Ace');
@@ -270,6 +276,29 @@ function play(s: GameState, p: PlayerState, card: Card, suit: Suit | undefined, 
 	const next = nextFrom(s, me, 1);
 	if (s.penalty) event(s, { t: 'penalty', by: me, kind: s.penalty.kind, amount: s.penalty.amount, target: next });
 	begin(s, next);
+	return s;
+}
+
+/** Throw the 2 on a 3 penalty (same suit) and pick up the penalty minus 2. The 2 starts no new penalty. */
+function soften(s: GameState, p: PlayerState, card: Card): GameState {
+	const me = p.id;
+	const amount = s.penalty!.amount;
+	p.hand = p.hand.filter(c => c !== card);
+	s.discard.unshift(card);
+	s.moves += 1;
+	s.stuck = 0;
+	s.drawn = null;
+	s.open = false;
+	s.suit = suitOf(card)!;
+	event(s, { t: 'play', by: me, card });
+	const got = take(s, p, Math.max(0, amount - 2));
+	if (got === null) return s; // game ended (draw pile ran out)
+	s.penalty = null;
+	event(s, { t: 'soften', by: me, card, amount, count: got.length });
+	log(s, `${who(me)} threw ${cardShort(card)} on the draw ${amount} and picked up ${got.length}`);
+	if (p.hand.length === 0) { finish(s, 'out', me); return s; }
+	if (s.rules.penaltyResponse === 'drawThenPlay') { begin(s, me); return s; }
+	begin(s, nextFrom(s, me));
 	return s;
 }
 

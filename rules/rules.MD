@@ -153,7 +153,12 @@ Use the same turn sequence and matching rules as PicknPlay Classic:
                                       it to pass the penalty onward. The
                                       penalty accumulates by 3 for each 3
                                       played. **Only the Black Spade
-                                      Ace** cancels a 3 penalty.
+                                      Ace** cancels a 3 penalty. A player
+                                      holding the **2 of the same suit**
+                                      as the 3 on top may throw it and
+                                      pick up the rest of the penalty
+                                      (the total minus 2). That 2 starts
+                                      no new penalty.
 
   **Joker**                           The next player must draw 5 cards.
                                       A player holding another Joker may

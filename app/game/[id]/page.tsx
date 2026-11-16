@@ -134,6 +134,14 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 						if (e.target === me) haptic([60, 40, 60]);
 					}, at + 150);
 					break;
+				case 'soften':
+					setTimeout(() => {
+						bubble(`${who(e.by)} threw ${suitSym(e.card)} on the draw ${e.amount} and ${e.by === me ? 'pick' : 'picked'} up ${e.count}`, 'skip', 3000);
+						playSound('cancel');
+					}, at + 150);
+					if (e.by !== me) for (let k = 0; k < Math.min(e.count, 5); k++) setTimeout(() => { fly('[data-drop="deck"]', `[data-seat="${e.by}"]`, CARD_BACK, 420); playSound('draw'); }, at + 400 + k * 140);
+					delay += 400 + Math.min(e.count, 5) * 140;
+					break;
 				case 'cancel': setTimeout(() => { bubble(`🛡️ ${who(e.by)} cooled the draw ${e.amount} with the A♠ · any card can follow`, 'phase', 2800); playSound('cancel'); }, at + 150); break;
 				case 'skip': setTimeout(() => { bubble(e.target === me ? `${who(e.by)} skipped you` : `${who(e.target)} is skipped`, 'skip', 2400); playSound('skip'); }, at + 150); break;
 				case 'reverse': setTimeout(() => { bubble('🔄 Direction reversed', 'info', 2200); playSound('reverse'); }, at + 150); break;
@@ -283,7 +291,8 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 	else if (data.status === 'ended') hint = 'Game ended';
 	else if (myTurn && pen) {
 		hintKind = 'skip';
-		hint = view.playable.length ? `Draw ${pen.amount}, or pass it on or cancel it` : `Draw ${pen.amount}: tap the draw pile`;
+		const soft = view.playable.find(c => rankOf(c) === '2' && pen.kind === '3');
+		hint = soft ? `Draw ${pen.amount}, or throw ${cardShort(soft)} and pick up ${pen.amount - 2}` : view.playable.length ? `Draw ${pen.amount}, or pass it on or cancel it` : `Draw ${pen.amount}: tap the draw pile`;
 	} else if (myTurn && view.step === 'drawn') { hintKind = 'me'; hint = 'It fits! Play it, or keep it'; }
 	else if (myTurn) { hintKind = 'me'; hint = view.playable.length ? (selected ? 'Tap again (or the pile) to play' : 'Your turn · tap a lifted card') : 'No card fits · tap the draw pile'; }
 	else if (view.turn) hint = names[view.turn]?.isBot ? `${nameOf(view.turn)} is thinking…` : `${nameOf(view.turn)}’s turn`;
@@ -301,7 +310,9 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
 		if (!view.playable.includes(card)) {
 			playSound('error');
 			if (view.step === 'drawn') return say('You can only play the card you just drew, or keep it');
-			if (pen) return say(`Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
+			if (pen) return say(pen.kind === '3' && view.variant === 'super' && top && rankOf(top) === '3'
+				? `Only a 3, the A♠ or the 2${SUIT_SYMBOLS[top.slice(-1) as Suit]} (pick up ${pen.amount - 2}) can answer this. Or draw ${pen.amount}.`
+				: `Only a ${penaltyName(pen.kind)} or the A♠ can answer this. Or draw ${pen.amount}.`);
 			if (rankOf(card) === 'A') return say('An Ace can’t go on a 2');
 			if (top && isJoker(top)) return say(`That one doesn’t fit. Play a ${top === 'XR' ? 'red card (♥ ♦)' : 'black card (♠ ♣)'} on the ${top === 'XR' ? 'red' : 'black'} Joker`);
 			return say(`That one doesn’t fit. Play ${SUIT_SYMBOLS[view.suit]} ${SUIT_NAMES[view.suit]} or a ${top ? rankOf(top) : ''}`);

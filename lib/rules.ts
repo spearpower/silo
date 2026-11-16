@@ -92,6 +92,14 @@ export function cancels(c: Card, _p: Penalty): boolean {
 	return c === BLACK_SPADE_ACE;
 }
 
+/**
+ * Super only: facing a 3 penalty, the 2 of the same suit as the 3 on top softens it. The player throws the 2
+ * and picks up the rest (the penalty minus 2). The 2 starts no new penalty.
+ */
+export function softens(c: Card, t: Pick<Table, 'variant' | 'penalty' | 'top'>): boolean {
+	return t.variant === 'super' && t.penalty?.kind === '3' && rankOf(c) === '2' && !!t.top && rankOf(t.top) === '3' && suitOf(c) === suitOf(t.top);
+}
+
 export const penaltyName = (k: PenaltyKind) => (k === 'X' ? 'Joker' : k);
 
 /** Cards with an effect: never chosen as the opening discard under the 'nonSpecial' rule. */
@@ -126,6 +134,7 @@ export function canPlay(t: Table, c: Card): boolean {
 	if (t.penalty) {
 		const p = penaltyOf(c, t.variant);
 		if (p && p.kind === t.penalty.kind) return true;
+		if (softens(c, t)) return true;
 		return cancels(c, t.penalty);
 	}
 	if (!t.top || t.open) return true;

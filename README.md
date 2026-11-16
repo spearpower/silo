@@ -51,6 +51,7 @@ Other implementation choices (documented, not configurable):
 - Only the A♠ answers a penalty with an Ace (Gerald's rule, 16 Nov 2026, replacing "any Ace cancels a 2"). A cancelling A♠ doesn't ask for a suit: the next player may play any card, and normal matching starts again from the card they play. An Ace played with no penalty waiting still asks for a suit.
 - Going out with any card (even a 2 or a cut 7) wins outright.
 - If nobody can play or draw for a whole round (all cards in hands), hands are counted ("blocked").
+- Super: facing a 3 penalty, the **2 of the same suit** as the 3 on top softens it (Gerald's rule, 16 Nov 2026): throw the 2 and pick up the penalty minus 2. The 2 starts no new penalty and the turn ends.
 - After a Joker, the next card follows the Joker's **colour** (Gerald's rule, 16 Nov 2026): any black card (♠ ♣) on the black Joker, any red card (♥ ♦) on the red Joker. Another Joker or an Ace may also follow.
 - Playing the cut 7 is optional: the player chooses **Cut** or **Just play it**.
 

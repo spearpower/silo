@@ -227,6 +227,34 @@ describe('PicknPlay Super penalties', () => {
 		expect(() => apply(r, 3, { type: 'play', card: '9C' })).toThrow(/red/);
 	});
 
+	it('Super: the 2 of the same suit softens a 3: throw the 2, pick up the rest', () => {
+		const s = table({ variant: 'super', hands: [['3H', '4C'], ['2H', '2S', 'KC'], ['7D', '8C']], top: '9H', deck: ['QD', 'JS', '9C', '5S', '6S'] });
+		apply(s, 1, { type: 'play', card: '3H' });
+		expect(viewFor(s, 2).playable).toEqual(['2H']);                 // 2♥ matches the 3♥; 2♠ doesn't
+		expect(() => apply(s, 2, { type: 'play', card: '2S' })).toThrow(/2♥ \(pick up 1\)/);
+		apply(s, 2, { type: 'play', card: '2H' });
+		expect(hand(s, 2)).toEqual(['2S', 'KC', 'QD']);                 // picked up 3 - 2 = 1
+		expect(s.penalty).toBeNull();                                   // the 2 starts no new penalty
+		expect(s.discard[0]).toBe('2H');
+		expect(s.suit).toBe('H');
+		expect(s.turn).toBe(3);
+		expect(s.events.some(e => e.t === 'soften' && e.count === 1 && e.amount === 3)).toBe(true);
+	});
+
+	it('Super: softening stacked 3s picks up the total minus 2', () => {
+		const s = table({ variant: 'super', hands: [['3H', '4C'], ['3S', '6S'], ['2S', '7D', '8C'], ['5C']], top: '9H' });
+		apply(s, 1, { type: 'play', card: '3H' });
+		apply(s, 2, { type: 'play', card: '3S' });                     // 6 now, a 3♠ on top
+		apply(s, 3, { type: 'play', card: '2S' });
+		expect(hand(s, 3)).toHaveLength(2 + 4);
+		expect(s.turn).toBe(4);
+	});
+
+	it('Classic has no softening: a 2 can’t answer a 3 (3s have no effect there anyway)', () => {
+		const t = { variant: 'classic' as const, rules: DEFAULT_RULES, top: '3H', suit: 'H' as const, penalty: { kind: '3' as const, amount: 3 } };
+		expect(canPlay(t, '2H')).toBe(false);
+	});
+
 	it('in Classic a 3 has no effect', () => {
 		const s = table({ hands: [['3H', '4C'], ['5H'], ['7D']], top: '9H' });
 		apply(s, 1, { type: 'play', card: '3H' });

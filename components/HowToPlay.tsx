@@ -38,7 +38,7 @@ export default function HowToPlay({ variant }: { variant?: Variant }) {
 			<h3>Special cards</h3>
 			<table className="pts"><tbody>
 				<tr><td><b>2</b></td><td>The next player draws 2, unless they play another 2 and pass it on (it grows by 2 each time). Only the <b>Ace of Spades (A♠)</b> cancels it.</td></tr>
-				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>A♠</b> cancels it.</td></tr>}
+				{sup && <tr><td><b>3</b></td><td>The next player draws 3, or passes it on with another 3 (+3 each). Only the <b>A♠</b> cancels it. Holding the <b>2 of the same suit</b> as the 3? Throw it and pick up just the rest (3 becomes 1, 6 becomes 4).</td></tr>}
 				{sup && <tr><td><b>Joker</b></td><td>The next player draws 5, or passes it on with the other Joker (+5). Only the <b>A♠</b> cancels it. After a Joker, the next card must match its colour: any <b>black</b> card (♠ ♣) on the black Joker, any <b>red</b> card (♥ ♦) on the red Joker. {rules.jokerOnAnything ? 'A Joker itself can go on any card.' : 'A Joker can only go on a Joker.'}</td></tr>}
 				<tr><td><b>8</b></td><td>With 2 players: play again. With more: the next player is <b>skipped</b>.</td></tr>
 				<tr><td><b>Jack</b></td><td>With 2 players: play again. With more: the <b>direction of play reverses</b>.</td></tr>
