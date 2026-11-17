@@ -9,6 +9,8 @@
 
 interface WakeLockSentinelLike { release: () => Promise<void>; released: boolean; addEventListener: (t: 'release', f: () => void) => void }
 
+import { nativeCallEnded, nativeCallStarted } from './native';
+
 let active = false;
 let lock: WakeLockSentinelLike | null = null;
 let handlers: { hangUp: () => void; toggleMute: () => void } | null = null;
@@ -37,6 +39,7 @@ export function startKeepAlive(title: string, h: { hangUp: () => void; toggleMut
 		document.addEventListener('visibilitychange', onVisible);
 	}
 	void requestLock();
+	nativeCallStarted(title, () => handlers?.hangUp()); // Android app: foreground call service
 	try {
 		if ('mediaSession' in navigator) {
 			navigator.mediaSession.metadata = new MediaMetadata({
@@ -60,6 +63,7 @@ export function stopKeepAlive() {
 	if (!active) return;
 	active = false;
 	handlers = null;
+	nativeCallEnded();
 	document.removeEventListener('visibilitychange', onVisible);
 	const l = lock;
 	lock = null;

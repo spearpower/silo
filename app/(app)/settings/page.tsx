@@ -10,17 +10,20 @@ import { api, dbMessage } from '@/lib/client/api';
 import { uploadPicture } from '@/lib/client/images';
 import { detachDevice, disablePush, enablePush, pushState, type PushState } from '@/lib/client/push';
 import { USERNAME } from '@/lib/validate';
+import { nativeApp } from '@/lib/client/native';
 import type { SettingsRow } from '@/lib/database.types';
 
 export default function SettingsPage() {
 	const { me, settings } = useStore(s => ({ me: s.me, settings: s.settings }));
+	const [inApp, setInApp] = useState(false);
+	useEffect(() => { setInApp(!!nativeApp()); }, []);
 	if (!me || !settings) return <div className="empty"><div className="spinner" aria-label="Loading settings" /></div>;
 	return (
 		<div className="page" style={{ paddingTop: 0 }}>
 			<div className="page-head" style={{ paddingLeft: 0, paddingRight: 0 }}><h1>Settings</h1></div>
 			<ProfileCard />
 			<PrivacyCard settings={settings} />
-			<NotificationsCard settings={settings} />
+			{inApp ? <AndroidAppCard /> : <NotificationsCard settings={settings} />}
 			<AppearanceCard />
 			<AccountCard />
 			<p className="muted small" style={{ textAlign: 'center', marginTop: 18 }}><Link href="/privacy">Privacy &amp; security</Link> · Silo</p>
@@ -144,6 +147,32 @@ const PUSH_TEXT: Record<PushState, string> = {
 	'ios-install': 'On iPhone and iPad: tap Share, then “Add to Home Screen”, and open Silo from there to allow notifications.',
 	'not-configured': 'Notifications aren’t set up on this server yet.',
 };
+
+/** Inside the Android app: battery shortcut (keeps calls alive). Phone alerts for the app come in a later update. */
+function AndroidAppCard() {
+	const [unrestricted, setUnrestricted] = useState<boolean | null>(null);
+	useEffect(() => {
+		const check = () => { try { setUnrestricted(!!nativeApp()?.batteryUnrestricted()); } catch { setUnrestricted(null); } };
+		check();
+		document.addEventListener('visibilitychange', check);
+		return () => document.removeEventListener('visibilitychange', check);
+	}, []);
+	return (
+		<section className="card" aria-label="Calls on this phone">
+			<h2>Calls on this phone</h2>
+			<div className="switch">
+				<span>
+					<span style={{ fontWeight: 600 }}>Keep calls running</span>
+					<span className="hint" style={{ display: 'block' }}>
+						{unrestricted ? 'Battery set to no restrictions. Calls keep going when the screen locks.' : 'Set Silo’s battery usage to “No restrictions” so calls don’t cut off when the screen locks.'}
+					</span>
+				</span>
+				<button className="btn btn-sm btn-outline" type="button" onClick={() => nativeApp()?.openBatterySettings()}>Settings</button>
+			</div>
+			<p className="hint" style={{ margin: '8px 0 0' }}>Message and call alerts for the Android app arrive in the next update.</p>
+		</section>
+	);
+}
 
 function NotificationsCard({ settings }: { settings: SettingsRow }) {
 	const { save } = useSettingSaver();
