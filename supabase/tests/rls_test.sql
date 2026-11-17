@@ -268,6 +268,15 @@ select silo_test.ok(silo_test.count('select * from realtime.messages') = 1, 'mem
 select silo_test.login('dave');
 select silo_test.ok(silo_test.count('select * from realtime.messages') = 0, 'non-member cannot listen on the chat channel');
 select silo_test.fails('insert into realtime.messages (topic, event, payload) values (''conv:'' || (select id from t where k = ''ab''), ''typing'', ''{}'')', 'non-member cannot send on the chat channel');
+reset role;
+insert into realtime.messages (topic, event, payload) values ('user:' || silo_test.uid('dave'), 'probe', '{}');
+select silo_test.login('dave');
+select set_config('realtime.topic', 'user:' || silo_test.uid('dave'), true);
+select silo_test.ok(silo_test.count('select * from realtime.messages where topic like ''user:%''') = 1, 'dave can join his own user channel');
+select silo_test.login('carol');
+select set_config('realtime.topic', 'user:' || silo_test.uid('dave'), true);
+select silo_test.ok(silo_test.count('select * from realtime.messages where topic like ''user:%''') = 0, 'carol cannot join dave''s user channel');
+select silo_test.fails('insert into realtime.messages (topic, event, payload) values (''user:'' || silo_test.uid(''carol''), ''x'', ''{}'')', 'nobody sends on a user channel');
 select set_config('realtime.topic', 'conv:not-a-uuid', true);
 select silo_test.ok(silo_test.count('select * from realtime.messages') = 0, 'garbage topic is refused, not an error');
 

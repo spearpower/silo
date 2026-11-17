@@ -122,7 +122,8 @@ export async function loadConversations() {
 }
 
 function subscribeDb() {
-	dbChannel = sb().channel('silo-db')
+	// Private per-user channel (Realtime public access is off); rows are still filtered by RLS.
+	dbChannel = sb().channel(`user:${state.meId}`, { config: { private: true } })
 		.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => onMessage(p.new as MessageRow))
 		.on('postgres_changes', { event: '*', schema: 'public', table: 'call_sessions' }, p => callListeners.forEach(f => f(p as never, 'call_sessions')))
 		.on('postgres_changes', { event: '*', schema: 'public', table: 'call_participants' }, p => callListeners.forEach(f => f(p as never, 'call_participants')))
