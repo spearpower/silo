@@ -22,6 +22,8 @@
 	--text-muted: #52667D;
 	--link: var(--stone-ink);
 	--accent-ink: var(--stone-ink);
+	--field-bg: #FFFFFF;
+	--field-border: #7891AA;
 	--primary: var(--egyptian);
 	--on-primary: #FFFFFF;
 	--accent: var(--stone);
@@ -59,6 +61,8 @@
 		--text-muted: #9DB4CA;
 		--link: #8DBBDD;
 		--accent-ink: #8DBBDD;
+		--field-bg: #0F3558;
+		--field-border: #5285AE;
 		--primary: var(--stone);
 		--on-primary: var(--egyptian);
 		--danger-ink: #FF6B6E;
@@ -74,7 +78,7 @@
 }
 :root[data-theme="dark"] {
 	--bg: #010F1E; --surface: #03203D; --surface-2: #0A2D50; --surface-3: #123A61; --border: #16395C;
-	--text: #EAF2F9; --text-muted: #9DB4CA; --link: #8DBBDD; --accent-ink: #8DBBDD; --primary: var(--stone); --on-primary: var(--egyptian);
+	--text: #EAF2F9; --text-muted: #9DB4CA; --link: #8DBBDD; --accent-ink: #8DBBDD; --field-bg: #0F3558; --field-border: #5285AE; --primary: var(--stone); --on-primary: var(--egyptian);
 	--danger-ink: #FF6B6E; --bubble-me: var(--stone); --on-bubble-me: var(--egyptian); --bubble-me-meta: #12385C;
 	--bubble-them: #0A2D50; --on-bubble-them: #EAF2F9; --rail: #010F1E;
 	--shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
@@ -132,9 +136,10 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label, .label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
 .input, .textarea, .select {
-	width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--border);
-	background: var(--surface); color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s;
+	width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--field-border);
+	background: var(--field-bg); color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s;
 }
+.input::placeholder, .textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .textarea { resize: vertical; min-height: 90px; }
 .input:focus, .textarea:focus, .select:focus { border-color: var(--stone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--stone) 30%, transparent); }
 .hint { font-size: 13px; color: var(--text-muted); }
@@ -305,10 +310,12 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 	display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px calc(8px + var(--safe-b)); background: var(--surface); border-top: 1px solid var(--border);
 }
 .composer textarea {
-	flex: 1; resize: none; min-height: 44px; max-height: 160px; padding: 11px 16px; border-radius: 22px; border: 1px solid var(--border);
-	background: var(--bg); outline: none; line-height: 1.4;
+	flex: 1; resize: none; min-height: 44px; max-height: 160px; padding: 11px 16px; border-radius: 22px;
+	border: 1.5px solid var(--field-border); background: var(--field-bg); color: var(--text); caret-color: var(--accent-ink);
+	outline: none; line-height: 1.4; transition: border-color .15s, box-shadow .15s;
 }
-.composer textarea:focus { border-color: var(--stone); }
+.composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
+.composer textarea:focus { border-color: var(--stone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--stone) 28%, transparent); }
 .send-btn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; flex: none; }
 .send-btn:disabled { background: var(--surface-3); color: var(--text-muted); }
 .blocked-note { padding: 14px 16px calc(14px + var(--safe-b)); text-align: center; background: var(--surface); border-top: 1px solid var(--border); color: var(--text-muted); font-size: 14px; }
