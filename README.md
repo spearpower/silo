@@ -1,180 +1,89 @@
-# PicknPlay
+# Silo
 
-**PicknPlay** is a real-time multiplayer shedding card game for 2 to 6 players. Match the top card of the
-discard pile by **suit or rank**, attack with draw penalties, change the play with 8s, Jacks and Aces,
-and win by **emptying your hand**, or end the game with a **cut** while your hand is low.
+**A private social space for people who know each other.**
 
-It runs in any browser and installs to the home screen as a PWA. Games can be played with friends
-(private tables with a PIN, invite links, Quick Game) or against **Virtual Friends** (computer players).
+Silo is a private communication app for close friends. It covers:
+- one-to-one messages
+- private groups
+- one-to-one voice calls
+- group voice calls
+- push notifications
 
-The game rules are specified in **[rules/rules.MD](rules/rules.MD)**, the authoritative rule document.
+It is built as a production-oriented MVP on **Next.js (React) + Supabase + LiveKit** and deploys on **Vercel**.
 
-## Game variants
-
-| | PicknPlay Classic | PicknPlay Super |
-|---|---|---|
-| Deck | 52 cards, no Jokers | 54 cards (two Jokers) |
-| Cards dealt | 7 each | 7 each |
-| Penalty cards | 2 (draw 2) | 2 (draw 2), 3 (draw 3), Joker (draw 5) |
-| Stacking | each 2 adds 2 | each matching card adds its amount |
-| Cancel ("cool-off") | only the **Ace of Spades** cancels a 2 | only the **Ace of Spades** cancels a 2, 3 or Joker penalty |
-| 8 | 2 players: play again · 3+: next player skipped | same |
-| Jack | 2 players: play again · 3+: direction reverses | same |
-| Ace | on anything but a 2; asks for the suit to follow (a cancelling A♠ asks for nothing: the next player may play any card) | same |
-| Cutting | the 7 of the cutter card's suit; lowest hand wins | same, and the cutter's hand must be below 60 |
-| A♠ value | 15 | 60 |
-
-Card points at a cut: 2 = 20, Ace = 15 (A♠ = 60 in Super), J = 11, Q = 12, K = 13, 3 to 10 face value.
-
-### Rule decisions (rules.MD §5 "Items to agree before play")
-
-rules.MD leaves some points open. They are implemented as **admin-configurable rule options**
-(Admin → Game rules, stored in `app_settings.rules`). Every game keeps a snapshot of the options it
-started with, so changing them never affects a game in progress. Defaults:
-
-| Open point | Default | Alternative |
-|---|---|---|
-| Super cut threshold ("below 60") | the player cutting must hold **< 60 points after playing the 7** | no limit |
-| Penalty response | stack a matching penalty card, cancel with the A♠, or **draw the full amount; the turn ends** | draw, then play on |
-| Empty draw pile | **reshuffle the discard pile**, keeping its top card | end the game and count hands |
-| Opening discard | top card of the draw pile; **special cards are re-buried** | any card (a special opening card has no effect) |
-| Tie for lowest at a cut | **tied players share the win** | the cutter wins the tie |
-| Joker points (not in rules.MD) | **50** | 0 / 20 / 60 |
-| What a Joker may be played on (not in rules.MD) | **any card** | only on a Joker |
-
-Other implementation choices (documented, not configurable):
-- The cutter card is turned up after dealing and placed **face up at the bottom of the draw pile**
-  (rules.MD §2.1.5); its suit stays shown on the table all game, even after it has been drawn.
-- The first player is chosen at random; play starts clockwise (seat order).
-- After drawing a card that fits, the player may play **that card** or keep it (pass). An unplayable
-  drawn card ends the turn.
-- Only the A♠ answers a penalty with an Ace (Gerald's rule, 16 Nov 2026, replacing "any Ace cancels a 2"). A cancelling A♠ doesn't ask for a suit: the next player may play any card, and normal matching starts again from the card they play. An Ace played with no penalty waiting still asks for a suit.
-- Going out with any card (even a 2 or a cut 7) wins outright.
-- If nobody can play or draw for a whole round (all cards in hands), hands are counted ("blocked").
-- Super: facing a 3 penalty, the **2 of the same suit** as the 3 on top softens it (Gerald's rule, 16 Nov 2026): throw the 2 and pick up the penalty minus 2. The 2 starts no new penalty and the turn ends.
-- After a Joker, the next card follows the Joker's **colour** (Gerald's rule, 16 Nov 2026): any black card (♠ ♣) on the black Joker, any red card (♥ ♦) on the red Joker. Another Joker or an Ace may also follow.
-- Playing the cut 7 is optional: the player chooses **Cut** or **Just play it**.
-
-## Technology stack
-
-- **Next.js 15** (App Router) + **React 19** + TypeScript: pages, API routes and the game engine in one app
-- **PostgreSQL** via `postgres` (postgres.js), using the existing `picknplay` database
-- **jose** for the signed session cookie; passwords are bcrypt-hashed in Postgres (`pgcrypto`)
-- Optional: **Supabase Realtime** (instant updates; otherwise polling), **LiveKit** (voice chat),
-  **Web Push** (turn alerts)
-- **Vitest** for the engine tests
-
-## Architecture
-
-```
-Browser (PWA) ──HTTPS──► Next.js: pages + /api routes
-                                │  lib/games.ts  (transactions, SELECT … FOR UPDATE)
-                                │  lib/engine.ts (pure rules engine)  lib/bot.ts (Virtual Friends)
-                                ▼
-                           PostgreSQL (games.state = authoritative game state)
-        ▲                                │
-        └──── "game changed" ping (Supabase Realtime, optional; else 1.5 s polling)
-```
-
-| Path | What |
+| Area | What's in the MVP |
 |---|---|
-| `lib/card-codes.ts` | card codes (`AS`, `10H`, `XR`…), deck per variant, point values (browser-safe) |
-| `lib/rules.ts` | variants, rule options + defaults, matching/penalty logic shared by server, bots and UI |
-| `lib/engine.ts` | the game engine: deal, cutter, turns, effects, penalties, drawing, cutting, scoring, per-player views |
-| `lib/bot.ts` | Virtual Friends (easy / normal / smart) |
-| `lib/games.ts` | game service: lobby, start, moves, timers, leave/kick/end, persistence, turn history |
-| `app/game/[id]/page.tsx` | the playing table |
-| `app/api/games/[id]/move` | the only way to change a game; validates input, then the engine validates the move |
-| `db/schema_final.sql` | base schema (users, games, game_players, game_events, card_values) |
-| `db/migrations/` | additive migrations on top of the base schema |
+| Accounts | Sign up and sign in with email and password (Supabase Auth), email confirmation, password reset, change password, delete account |
+| Profiles | Display name, unique @username, photo (Supabase Storage), "about" line |
+| People | Search by username or name, friend requests, block, report |
+| Presence | Online dot (Realtime Presence), last seen; both can be hidden |
+| Direct messages | Real-time, persistent history with paging, typing indicator, delivered and read ticks, unread counts, retry-safe sending |
+| Groups | Private groups of friends with owner, admin and member roles. Add, remove, rename, picture, leave (ownership hands over) |
+| Voice calls | One-to-one and group audio through LiveKit. Ringing, answer, decline, mute, call timer, who's speaking, reconnecting, missed calls |
+| Notifications | Web Push for new messages, incoming and missed calls. Message text is hidden by default |
+| Safety | Row Level Security on every table, server-checked call tokens, rate limits, admin report queue with suspensions |
 
-### Server authority and privacy
+Video calling is **not** part of this release. Call records already carry a `media` field (`audio` now, `video` reserved), so video can be added later without changing the call architecture.
 
-- Every move is `POST /api/games/:id/move` → one transaction → `SELECT … FOR UPDATE` on the game row →
-  `lib/engine.ts` checks it is your turn, the card is in **your** hand and it is legal → save → bump `version`.
-  Concurrent moves are serialized by the row lock and can't corrupt the state.
-- `GET /api/games/:id` returns **only that player's view**: their own hand, other players' card **counts**,
-  the visible piles. The draw pile and other hands never leave the server. Admins can *watch* a table but
-  never see hands. Hands are revealed to everyone only after the game ends.
-- Writes require a same-origin request (CSRF check) and a signed-in, active account; moves and sign-in are rate-limited.
+## Security model (accurate summary)
 
-## PostgreSQL configuration
+- Only the members of a conversation can read it. PostgreSQL Row Level Security enforces this, not only the UI.
+- Traffic is encrypted in transit (TLS/WSS). Supabase encrypts stored data at rest.
+- **Silo is not end-to-end encrypted.** Messages are stored on the server so they can sync across devices.
+- See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the in-app `/privacy` page.
 
-The app uses one connection, `DATABASE_URL`, from `.env.local` (locally) or the host's environment
-variables. Nothing is hard-coded. Local default: `postgres://postgres@localhost:5432/picknplay`.
+## Quick start (local)
 
-Tables: `users`, `games`, `game_players`, `game_events` (turn history), `card_values` (reference) from the
-base schema, plus `app_settings`, `game_points`, `game_messages`, `friendships`, `game_invites`,
-`push_subscriptions` from migration 001. `games.state` (jsonb) holds the authoritative state; the readable
-columns (`top_card_*`, `current_suit`, `cutter_*`, `deck_remaining`, `discard_pile`, `direction`,
-`game_players.hand_cards`, `card_count`, `points`, `final_rank`, `has_cut_card`) are mirrored from it in the
-same transaction for reporting.
-
-## Installation
+Requirements: Node 20+, a Supabase project (free tier is fine) and a LiveKit Cloud project (free tier is fine).
 
 ```bash
 npm install
-copy .env.example .env.local     # set DATABASE_URL and SESSION_SECRET
+cp .env.example .env.local     # fill in your Supabase / LiveKit / VAPID values
+npm run dev                    # http://localhost:3030
 ```
 
-`SESSION_SECRET`: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+Before the first run, apply the database migrations to your Supabase project. The full step-by-step guide is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Database setup and migrations
+Until Supabase is configured, every page shows a **Setup** screen instead of failing.
 
-1. Create the database and run the base schema `db/schema_final.sql` (pgAdmin → Query Tool, or psql).
-2. Run every file in `db/migrations/` in order (each is additive and safe to run more than once):
-   ```bash
-   psql -U postgres -d picknplay -f db/migrations/001_picknplay_core.sql
-   ```
-3. Optional, **local only**: sample accounts from a git-ignored seed file (`db/seed_sample_users.sql`).
-   Never run test accounts with weak passwords on a public server.
+## Scripts
 
-| Migration | Adds |
+| Command | What it does |
 |---|---|
-| `001_picknplay_core.sql` | variants, PIN, timer, `games.state`, play-again link, early endings; `app_settings` (switches + rule options); leaderboard points; table chat; friends & invites; push subscriptions; 6 Virtual Friends; row-level security lock-down |
+| `npm run dev` | Development server on port 3030 |
+| `npm run build` / `npm start` | Production build / serve it on port 3030 |
+| `npm test` | Unit tests (Vitest) |
+| `npm run typecheck` | TypeScript check |
 
-## Running the application
+The database and RLS tests run with `psql` against a local PostgreSQL database. See [docs/TESTING.md](docs/TESTING.md).
 
-```bash
-npm run dev        # http://localhost:3010 (development)
-npm run build && npm start   # production build on :3010
+## Project layout
+
+```
+app/                    Next.js App Router
+  (auth)/               sign in, sign up, forgot / reset password
+  (app)/                the signed-in app: chats, groups, contacts, settings, admin, chat screens
+  api/                  server routes: messages, calls, push, account, admin, cron, client errors
+  auth/                 email-link landing (/auth/confirm) and sign-out
+components/             UI components (shell, chat list, call screens, sheets, icons)
+lib/
+  supabase/             browser, per-request server, service-role admin and middleware clients
+  client/               browser state: chat store (Realtime), calls (LiveKit), push, sounds
+  api.ts calls.ts livekit.ts push.ts notify.ts validate.ts format.ts receipts.ts
+  database.types.ts     types for supabase-js (regenerate with the Supabase CLI)
+supabase/
+  migrations/           schema, functions/RPCs, RLS, Realtime + Storage (apply in order)
+  tests/rls_test.sql    authorisation tests run as different users
+  local/                local-only Supabase shim for running those tests on plain PostgreSQL
+tests/unit/             Vitest unit tests
+public/                 icons, manifest, service worker, offline page
+tools/gen_icon.js       generates the app icon SVG
+docs/                   architecture, testing, cleanup record
 ```
 
-## Running tests
+## Documentation
 
-```bash
-npm test           # engine tests: both variants, every special card, penalties, cutting, scoring, privacy, bots
-npm run typecheck
-```
-
-## Multiplayer
-
-- **Create** a table (Host): choose Classic or Super, optional 4-digit PIN, turn timer.
-- **Join** by game number / invite link / WhatsApp share (+ PIN for private tables), Quick Game, or a friend's invite.
-- **Waiting room**: players and avatars, add Virtual Friends, the host starts the game.
-- **Sync**: after each move the server broadcasts a version ping (Supabase Realtime) and every device
-  re-fetches its own view; without Realtime, devices poll every 1.5 s. Table events (plays, draws,
-  penalties, skips, reversals, cuts) are animated from the shared event list.
-- **Disconnects**: the game lives on the server; reopening the app (Continue) restores your hand and turn.
-  With a turn timer, an expired turn draws for the player and passes; 3 missed turns in a row remove them.
-  The host can remove players or end a game, with a reason.
-- **Results**: winner(s), how the game ended, every hand revealed with its points, leaderboard points.
-
-## Sounds, alerts and voice
-
-- **Sounds** (Web Audio): deal, play, draw, penalty (heavier when it hits you), cancel, suit call, skip, reverse, reshuffle, cut,
-  last-card warning, win / lose, a tick in your last 5 seconds, and a soft “bonk” for a card that doesn't fit. On/off + volume per device.
-- **Alerts**: Web Push (your turn, including a waiting draw penalty, game start, game over, invites, friend requests), an in-app
-  “It’s your turn” banner on every other page, the app-icon badge, and the tab title while the table is in the background.
-- **Voice chat**: LiveKit; one connection from the waiting room to the table, who’s-in list, mute, speaking rings on seats.
-
-## Deployment
-
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** (Vercel + hosted PostgreSQL/Supabase, environment variables, checks).
-
-## Credits
-
-- Playing-card faces: **English pattern playing cards** from Wikimedia Commons
-  ("English pattern &lt;rank&gt; of &lt;suit&gt;.svg"), released under **CC0 / public domain**.
-  Re-download with `node tools/fetch_cards.js`.
-- Jokers, card back, app icon, avatars and sounds: original artwork generated by the scripts in `tools/`.
+- [DEPLOYMENT.md](DEPLOYMENT.md): Supabase, LiveKit, Web Push and Vercel setup, plus environment variables
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it works, the data model, RLS policies, call and notification flows, and the original app audit
+- [docs/TESTING.md](docs/TESTING.md): automated tests, results, and the manual checklist for what needs real services
+- [docs/CLEANUP.md](docs/CLEANUP.md): what was removed from the original codebase and why

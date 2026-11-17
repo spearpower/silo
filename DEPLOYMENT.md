@@ -1,124 +1,121 @@
-# PicknPlay setup and deployment guide
+# Deploying Silo
 
-PicknPlay is a Next.js 15 app: pages, API routes and the game engine run together (on your machine, a
-Node server, or **Vercel**). All data lives in **PostgreSQL**. Live updates use **Supabase Realtime**
-when configured; without it the app falls back to polling, so plain PostgreSQL works everywhere.
+Silo needs three services, plus a VAPID key pair for Web Push:
+- **Supabase**: database, auth, realtime and storage
+- **LiveKit**: voice
+- **Vercel**: hosting
 
-```
-Phone / browser ──HTTPS──► Next.js (pages + /api routes + game engine)
-        ▲                          │ SQL (DATABASE_URL)
-        │ "game changed" ping      ▼
-        └──── Supabase Realtime ◄── PostgreSQL
-```
+Set them up in the order below.
 
----
+## 1. Supabase project
 
-## 1. Local (do this first)
+1. Create a project at supabase.com. Pick the region closest to your users, and match the Vercel function region to it (step 5).
+2. **Apply the migrations** in `supabase/migrations/`, in filename order:
+   - `20261117000100_silo_schema.sql`: tables, constraints, indexes, triggers
+   - `20261117000200_silo_functions.sql`: helper functions and RPCs (chats, groups, friends, calls, admin)
+   - `20261117000300_silo_rls.sql`: privileges and Row Level Security policies
+   - `20261117000400_silo_realtime_storage.sql`: Realtime publication, private-channel policies, storage buckets and policies
 
-1. PostgreSQL database `picknplay` with the base schema `db/schema_final.sql`.
-2. Run the migrations in `db/migrations/` in order (pgAdmin → Query Tool → open file → Execute, or psql).
-3. `.env.local`:
+   Either paste each file into **SQL Editor → New query → Run**, or use the CLI:
+
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref <project-ref>
+   npx supabase db push
    ```
-   DATABASE_URL=postgres://postgres@localhost:5432/picknplay
-   SESSION_SECRET=<64 random hex chars>
+
+   **Never** run `supabase/local/supabase_shim.sql` on a Supabase project. It is only for local tests, and it refuses to run there anyway.
+3. **Authentication → Sign In / Providers → Email**: enabled. Keep **Confirm email** on (recommended). Set the minimum password length to 8 and turn on leaked-password protection if your plan has it.
+4. **Authentication → URL Configuration**:
+   - Site URL: `https://<your-domain>`
+   - Redirect URLs: `https://<your-domain>/auth/confirm`, `http://localhost:3030/auth/confirm`, and your Vercel preview pattern (for example `https://*-<team>.vercel.app/auth/confirm`).
+5. **Authentication → Emails** (optional, recommended): use the token-hash links so confirmation works across devices:
+   - Confirm signup: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/`
+   - Reset password: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery`
+
+   The default `?code=` links also work, as long as the link is opened in the same browser.
+
+   Set up custom SMTP for production. The built-in sender is heavily rate-limited.
+6. **Realtime → Settings**: turn **off** "Allow public access", so channels are private and the `realtime.messages` policies from migration 4 decide who may join `conv:<id>` and `online`.
+7. **Storage**: migration 4 creates the `avatars` and `group-photos` buckets (public read, 2 MB, PNG/JPEG/WebP) and their write policies. Nothing else to do.
+8. **First admin**: after you sign up in the app, run this once in the SQL editor:
+
+   ```sql
+   update public.profiles set role = 'admin' where username = '<your-username>';
    ```
-4. `npm install`, then `npm run dev` → http://localhost:3010
-5. Optional: `db/seed_sample_users.sql` (git-ignored, local only) creates test accounts.
+9. **Keys** (Project Settings → API Keys): copy the project URL, the **publishable** key and a **secret** key.
+   - Older projects show the "anon" and "service_role" keys instead. Both naming schemes work.
+   - The secret key must only ever go into server environment variables.
 
-## 2. Hosted database
+**Types:** `lib/database.types.ts` was written to match the migrations. Once the project exists, regenerate it with:
 
-Any PostgreSQL 14+ works. With **Supabase**:
-1. Create a project near your players; save the database password.
-2. SQL Editor: run `db/schema_final.sql`, then each migration in `db/migrations/`.
-3. **Connect → Transaction pooler** (port 6543) URI → this is the production `DATABASE_URL`.
-4. Project Settings → API Keys: Project URL, anon/publishable key, service_role/secret key (for Realtime).
-
-Every table has row-level security on with no policies: browser keys can't read anything. Only the
-server (through `DATABASE_URL`) reads or writes data. Keep the service_role key server-side only.
-
-**Create your first admin** on the hosted database (choose a strong password):
-```sql
-insert into users (username, password_hash, fullname, role)
-values ('gero', app_hash_password('<strong password>'), 'Gerald', 'superadmin');
+```bash
+npx supabase gen types typescript --project-id <project-ref> --schema public > lib/database.types.ts
 ```
 
-## 3. Vercel
+Then re-add the helper type exports at the bottom of the file, or keep the hand-written file if nothing changed.
 
-1. Import the GitHub repo `spearpower/PicknPlay` (framework: Next.js).
-2. Environment Variables (Production and Preview):
+## 2. LiveKit (voice)
 
-| Name | Value | Needed |
+1. Create a project at cloud.livekit.io.
+2. Go to Settings → Keys, create a key and copy:
+   - the WebSocket URL (`wss://...livekit.cloud`)
+   - the API key
+   - the API secret
+3. No webhooks are required. Silo settles calls itself through keep-alive pings, a no-answer timeout and a daily sweep, so nothing depends on a long-running server.
+
+## 3. Web Push (VAPID)
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+This prints a public key and a private key. Use a `mailto:` address you control for `VAPID_SUBJECT`.
+
+Browser support:
+- Chrome, Edge and Firefox on desktop and Android work in the browser and as an installed app.
+- **iPhone and iPad (iOS 16.4+) only receive notifications after Silo is added to the Home Screen and opened from there.** The Settings screen explains this to iPhone users.
+
+Notifications need the user to tap **Settings → Notifications** and allow them in the browser prompt.
+
+## 4. Environment variables
+
+| Name | Where it's used | Secret? |
 |---|---|---|
-| `DATABASE_URL` | transaction pooler URI | yes |
-| `SESSION_SECRET` | 64 random hex chars (not your local one) | yes |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Project URL, service_role key | for instant updates |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project URL, anon key | for instant updates |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | `npx web-push generate-vapid-keys` | phone alerts |
-| `CRON_SECRET` | random string | daily clean-up job |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud project | voice chat (admin switch) |
+| `NEXT_PUBLIC_SUPABASE_URL` | browser + server | no |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`) | browser + server; limited by RLS | no |
+| `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | server only: push fan-out, call sweeper, account deletion, suspensions | **yes** |
+| `LIVEKIT_URL` | server; also allowed in the CSP | no |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | server only: signs call tokens | **yes** (secret) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | browser: subscribes the device | no |
+| `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | server only: sends pushes | **yes** (private key) |
+| `CRON_SECRET` | server: protects `/api/cron/daily` | **yes** |
+| `NEXT_PUBLIC_SITE_URL` | optional | no |
 
-Use **new** keys for PicknPlay. Don't reuse another app's Supabase / LiveKit / VAPID keys.
+Notes:
+- `NEXT_PUBLIC_*` values are built into the browser bundle. **Redeploy after changing them.**
+- The Content Security Policy in `next.config.mjs` is built from `NEXT_PUBLIC_SUPABASE_URL` and `LIVEKIT_URL` at build time.
+- Missing server keys turn features off cleanly instead of crashing:
+  - without LiveKit: "Voice calls aren't set up on this server yet"
+  - without VAPID: notifications show as not configured
 
-3. Deploy. `vercel.json` pins functions to `lhr1` (London); change `regions` to the Vercel region nearest
-   your database. It also schedules `/api/cron/daily` at 03:00 UTC.
+## 5. Vercel
 
-## 4. Other hosts (VPS / Node)
+1. Import `spearpower/silo`. The framework is detected as **Next.js**. Keep the default build command (`next build`) and output.
+2. Under **Settings → Environment Variables**, add the variables above for **Production**, **Preview** and **Development**.
+   - Use separate Supabase projects (or at least separate keys) for production and preview if you can.
+3. `vercel.json` sets:
+   - the function region (`lhr1`, London). Change it to the region nearest your Supabase project.
+   - a daily cron (`/api/cron/daily`, 03:00 UTC) that settles stale calls and prunes rate-limit rows. Vercel sends `Authorization: Bearer $CRON_SECRET` automatically.
+4. Deploy. Then open the site, sign up, confirm the email, and make yourself admin (step 1.8).
 
-`npm ci && npm run build && npm start` (port 3010; put it behind a TLS reverse proxy such as nginx or Caddy).
-Set the same environment variables. The PWA (install, offline page, push) requires HTTPS.
+**Serverless notes:**
+- Nothing is kept in server memory between requests.
+- Rate limits live in Postgres (`rate_limit()`).
+- Call state lives in `call_sessions` and `call_participants`.
+- Realtime runs between browsers and Supabase directly.
+- Server code uses supabase-js over HTTPS (PostgREST), so there are no long-lived database connections.
 
-## 5. Checks after deploying
+## 6. After deploying: smoke test
 
-- [ ] Sign in; Admin → Game rules shows the defaults.
-- [ ] Host a **Classic** table on one phone, join from a second phone with the invite link / PIN.
-- [ ] Moves appear on the other phone within a second (Realtime) or ~1.5 s (polling).
-- [ ] Play a 2 (the next player must draw 2 or answer), an Ace (suit picker), an 8 and a Jack.
-- [ ] Cut with the 7 of the cutter suit: results show every hand and the lowest wins.
-- [ ] Host a **Super** table: Jokers and 3s penalise; only A♠ cancels them; a cut needs < 60 points.
-- [ ] Close the app mid-game, reopen → Continue → same hand and turn.
-- [ ] Practice game with Virtual Friends finishes on its own.
-
-## 6. Migrations
-
-Database changes live in `db/migrations/`, numbered, additive and safe to re-run.
-**Run a migration on the hosted database before deploying the code that needs it.**
-
-| File | Adds |
-|---|---|
-| `001_picknplay_core.sql` | variants, PIN, timer, `games.state`, play-again, early endings, `app_settings` (+ rule options), `game_points`, `game_messages`, friendships, invites, push subscriptions, Virtual Friends, RLS lock-down |
-
-## 7. How a move works (for developers)
-
-1. The client sends `POST /api/games/:id/move` with `{ type: 'play', card, suit?, cut? }`, `{ type: 'draw' }`,
-   `{ type: 'pass' }` or `{ type: 'timeout' }`. The route checks the shape (card code format, suit).
-2. The server opens a transaction, locks the game row (`SELECT … FOR UPDATE`) and applies `lib/engine.ts`,
-   which checks turn, ownership and legality against the variant and the game's rule snapshot.
-3. It saves `games.state`, mirrors the readable columns and hands, appends `game_events` (turn history),
-   sets the turn deadline and, when the game ends, final places and leaderboard points.
-4. It pings `game-<id>`; every client re-fetches `GET /api/games/:id`, which returns only that player's view.
-
-**Turn timer:** the deadline is stored in `games.turn_deadline`. A device reports `timeout` at zero; the
-server checks the clock before drawing for that player. If nobody reports it, the next read applies it.
-No always-on server process is needed.
-
-## 8. Sounds, phone alerts and voice chat
-
-**Sounds** need no setup. They are original WAV files in `public/sounds/` (re-make them with
-`python tools/gen_pnp_sounds.py`). Each player can switch them off or set the volume (Account → Sound, or 🔔 on the table).
-
-**Phone alerts (Web Push)** cover "your turn" (also "Draw 4 is waiting for you"), "game started", "game over" with who won,
-friend requests and table invites. They are only sent to players who aren't looking at the table.
-1. Use PicknPlay's own VAPID keys (already generated in your local `.env.local`): copy
-   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (set it to `mailto:<your email>`) to Vercel. Redeploy.
-2. On a phone: Account → **Turn alerts on this phone** → allow → **Send a Test Alert**.
-   iPhone needs iOS 16.4+ and PicknPlay added to the Home Screen first.
-3. Keep the same VAPID keys forever: changing them silently stops alerts on every phone until people switch alerts on again.
-
-**Voice chat (LiveKit Cloud)**
-1. At cloud.livekit.io create a project → **Settings → Keys** → create an API key. Copy the **WebSocket URL**
-   (`wss://<project>.livekit.cloud`), the **API key** and the **secret**.
-2. Vercel → Environment Variables: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Redeploy.
-3. Sign in as an admin → Admin → switch **Voice chat at tables** on (it stays greyed out until the 3 settings exist).
-4. At a table (or in the waiting room) tap 🎙, allow the microphone. The connection stays up from the waiting room to the
-   table; tap "Voice · N" to see who's in, 🎙/🔇 to mute, ✕ to leave. Seats show 🎧 (in voice), 🔇 (muted) and a blue ring while talking.
-Only seated players get a voice pass (3 hours, one table's room, microphone only, so no camera and no data).
+Follow the manual checklist in [docs/TESTING.md](docs/TESTING.md). It needs two accounts on two devices or browsers.

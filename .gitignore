@@ -6,7 +6,7 @@ build/
 *.tsbuildinfo
 next-env.d.ts
 
-# Local environment and secrets (online values live in Vercel → Settings → Environment Variables)
+# Local environment and secrets (production values live in Vercel → Settings → Environment Variables)
 .env
 .env.*
 !.env.example
@@ -14,18 +14,14 @@ next-env.d.ts
 .vercel/
 .supabase/
 supabase/.temp/
+supabase/.branches/
 
-# Database files: only the schema and migrations are committed.
-# Imports, dumps and connection notes contain real player data or passwords.
-db/*
-!db/schema_final.sql
-!db/migrations/
-# db/seed_sample_users.sql stays local (test passwords)
+# Local-only notes, dumps and credentials from earlier projects (never commit)
+db/
+rules/
 *.sql.gz
 *.dump
 *.backup
-
-# Notes / credentials kept locally
 *.pem
 *.key
 connect*.txt
@@ -41,6 +37,3 @@ Thumbs.db
 .DS_Store
 .vscode/
 .idea/
-
-# Task brief (contains personal details and test passwords) stays local
-rules/PicknPlay_Refactoring_Prompt.md

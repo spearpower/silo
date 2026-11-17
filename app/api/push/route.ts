@@ -1,12 +1,28 @@
-import { body, fail, json, withUser } from '@/lib/http';
-import { pushConfigured, removeSubscription, saveSubscription } from '@/lib/push';
+import { json, limit, must, readJson, withUser, HttpError } from '@/lib/api';
+import { adminConfigured, adminSupabase } from '@/lib/supabase/admin';
 
-// POST { subscription } saves this phone; POST { remove: endpoint } forgets it. GET says if alerts are available.
-export const GET = withUser(async () => json({ available: pushConfigured() }));
+interface Body { subscription: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }; remove: string }
 
-export const POST = withUser(async (user, req: Request) => {
-	const b = await body<{ subscription: { endpoint: string; keys: { p256dh: string; auth: string } }; remove: string }>(req);
-	if (b.remove) { await removeSubscription(user.id, String(b.remove)); return json({ ok: true }); }
-	try { await saveSubscription(user.id, b.subscription || {}); } catch { return fail('That alert subscription isn’t valid'); }
+// Save or remove this device's push subscription (always for the signed-in person only).
+export const POST = withUser(async ({ db, userId, req }) => {
+	const b = await readJson<Body>(req);
+	if (typeof b.remove === 'string') {
+		must(await db.from('push_subscriptions').delete().eq('endpoint', b.remove).eq('user_id', userId), 'push remove');
+		return json({ ok: true });
+	}
+	const s = b.subscription;
+	if (!s?.endpoint || !/^https:\/\//.test(s.endpoint) || s.endpoint.length > 1000 || !s.keys?.p256dh || !s.keys?.auth
+		|| s.keys.p256dh.length > 200 || s.keys.auth.length > 100) {
+		throw new HttpError('That notification subscription isn’t valid');
+	}
+	await limit(db, 'push_subscribe', 10, 3600);
+	// A device that was used by someone else before: its old subscription row belongs to them, so the server
+	// (not the browser) clears it before saving it for the current person.
+	if (adminConfigured()) await adminSupabase().from('push_subscriptions').delete().eq('endpoint', s.endpoint).neq('user_id', userId);
+	await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint).eq('user_id', userId);
+	must(await db.from('push_subscriptions').insert({
+		user_id: userId, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth,
+		user_agent: (req.headers.get('user-agent') || '').slice(0, 200),
+	}), 'push save');
 	return json({ ok: true });
 });

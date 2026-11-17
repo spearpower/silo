@@ -1,99 +1,122 @@
-// Phone alerts (Web Push). Free: uses VAPID keys, no third-party service.
-// Every send is best effort: alerts never break or slow down a move.
+import 'server-only';
+// Web Push delivery (VAPID, no third-party service). Runs with the service role because it reads other people's
+// subscriptions; every caller has already been authorised by RLS for the action that triggers the alert.
+// Best effort: a failed alert never fails the message or call that caused it.
 import webpush from 'web-push';
-import { sql } from './db';
-
-export interface PushPayload { title: string; body: string; url: string; tag?: string }
+import { adminConfigured, adminSupabase } from './supabase/admin';
+import { incomingCallNotification, messageNotification, missedCallNotification, type PushPayload } from './notify';
+import type { MessageRow, MissedRow } from './database.types';
 
 let ready: boolean | null = null;
-function configure(): boolean {
+export function pushConfigured(): boolean {
 	if (ready !== null) return ready;
 	const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
-	ready = !!(pub && priv);
+	ready = !!(pub && priv && adminConfigured());
 	if (ready) webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', pub!, priv!);
 	return ready;
 }
-export const pushConfigured = () => configure();
 
-/** Send to every phone these players allowed alerts on. Never throws. */
-export async function notifyUsers(userIds: number[], payload: PushPayload): Promise<number> {
-	if (!userIds.length || !configure()) return 0;
+/** People seen in the app in the last 30 s get in-app sounds/banners instead of a push. */
+const ACTIVE_MS = 30_000;
+
+async function activeUsers(ids: string[]): Promise<Set<string>> {
+	if (!ids.length) return new Set();
+	const { data } = await adminSupabase().from('user_presence').select('user_id, last_seen_at').in('user_id', ids);
+	const now = Date.now();
+	return new Set((data || []).filter(r => now - new Date(r.last_seen_at).getTime() < ACTIVE_MS).map(r => r.user_id));
+}
+
+export async function sendTo(userIds: string[], payload: PushPayload, opts: { ttl?: number; urgency?: 'normal' | 'high' } = {}): Promise<number> {
+	if (!userIds.length || !pushConfigured()) return 0;
+	const admin = adminSupabase();
+	const { data: subs, error } = await admin.from('push_subscriptions').select('id, endpoint, p256dh, auth').in('user_id', userIds);
+	if (error) { console.error('[push] subscriptions', error.message); return 0; }
 	let sent = 0;
-	try {
-		const subs = await sql<{ endpoint: string; p256dh: string; auth: string }[]>`
-			select endpoint, p256dh, auth from push_subscriptions where user_id in ${sql(userIds)}`;
-		await Promise.all(subs.map(async s => {
-			try {
-				await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 900, urgency: 'high', topic: payload.tag?.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) });
-				sent++;
-			} catch (e) {
-				const code = (e as { statusCode?: number }).statusCode;
-				if (code === 404 || code === 410) await sql`delete from push_subscriptions where endpoint = ${s.endpoint}`.catch(() => {});
-				else console.error('[push]', code, (e as Error).message);
-			}
-		}));
-	} catch (e) { console.error('[push]', (e as Error).message); }
+	await Promise.all((subs || []).map(async s => {
+		try {
+			await webpush.sendNotification(
+				{ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+				JSON.stringify(payload),
+				{ TTL: opts.ttl ?? 3600, urgency: opts.urgency ?? 'normal', topic: payload.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) },
+			);
+			sent++;
+		} catch (e) {
+			const code = (e as { statusCode?: number }).statusCode;
+			if (code === 404 || code === 410) await admin.from('push_subscriptions').delete().eq('id', s.id); // phone unsubscribed
+			else console.error('[push] send', code, (e as Error).message);
+		}
+	}));
 	return sent;
 }
 
-export async function saveSubscription(userId: number, sub: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }) {
-	if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error('Bad subscription');
-	await sql`
-		insert into push_subscriptions (endpoint, user_id, p256dh, auth) values (${sub.endpoint.slice(0, 1000)}, ${userId}, ${sub.keys.p256dh.slice(0, 200)}, ${sub.keys.auth.slice(0, 100)})
-		on conflict (endpoint) do update set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`;
+/** New message: everyone else in the chat who isn't looking at the app and hasn't muted the chat. */
+export async function alertMessage(msg: MessageRow): Promise<void> {
+	if (!pushConfigured() || msg.kind !== 'text' || !msg.sender_id) return;
+	try {
+		const admin = adminSupabase();
+		const [{ data: conv }, { data: parts }, { data: sender }] = await Promise.all([
+			admin.from('conversations').select('id, kind, title').eq('id', msg.conversation_id).single(),
+			admin.from('conversation_participants').select('user_id, muted_until').eq('conversation_id', msg.conversation_id),
+			admin.from('profiles').select('display_name').eq('id', msg.sender_id).single(),
+		]);
+		if (!conv || !parts || !sender) return;
+		const now = Date.now();
+		const targets = parts.filter(p => p.user_id !== msg.sender_id && (!p.muted_until || new Date(p.muted_until).getTime() < now)).map(p => p.user_id);
+		const active = await activeUsers(targets);
+		const offline = targets.filter(id => !active.has(id));
+		if (!offline.length) return;
+		const { data: settings } = await admin.from('user_settings').select('user_id, push_previews').in('user_id', offline);
+		const previews = new Set((settings || []).filter(s => s.push_previews).map(s => s.user_id));
+		const make = (withText: boolean) => messageNotification({
+			conversationId: conv.id, kind: conv.kind, groupTitle: conv.title, senderName: sender.display_name, text: msg.body, previews: withText,
+		});
+		await Promise.all([
+			sendTo(offline.filter(id => previews.has(id)), make(true)),
+			sendTo(offline.filter(id => !previews.has(id)), make(false)),
+		]);
+	} catch (e) { console.error('[push] message', (e as Error).message); }
 }
 
-export async function removeSubscription(userId: number, endpoint: string) {
-	await sql`delete from push_subscriptions where endpoint = ${endpoint} and user_id = ${userId}`;
+async function callContext(callId: string) {
+	const admin = adminSupabase();
+	const { data: call } = await admin.from('call_sessions').select('id, conversation_id, kind, started_by').eq('id', callId).single();
+	if (!call) return null;
+	const [{ data: conv }, { data: caller }] = await Promise.all([
+		admin.from('conversations').select('title').eq('id', call.conversation_id).single(),
+		call.started_by ? admin.from('profiles').select('display_name').eq('id', call.started_by).single() : Promise.resolve({ data: null }),
+	]);
+	return { call, groupTitle: conv?.title ?? null, callerName: caller?.display_name || 'Someone' };
 }
 
-/** "Your turn" — only if that person isn't looking at the table right now (seen in the last 25 s). */
-export async function alertTurn(gameId: number): Promise<void> {
-	const [t] = await sql<{ user_id: number; penalty: { kind: string; amount: number } | null; variant: string }[]>`
-		select g.turn_user_id as user_id, g.state->'penalty' as penalty, g.variant from games g
-		join users u on u.id = g.turn_user_id
-		join game_players p on p.game_id = g.id and p.user_id = g.turn_user_id
-		where g.id = ${gameId} and g.status = 'playing' and not u.is_bot and p.left_at is null
-		  and p.last_seen < now() - interval '25 seconds'`.catch(() => [] as never[]);
-	if (!t) return;
-	const pen = t.penalty;
-	const body = pen
-		? `Draw ${pen.amount} is waiting for you in game ${gameId}. Answer it with ${pen.kind === '2' ? 'a 2' : pen.kind === '3' ? 'a 3' : 'a Joker'} or the A♠, or draw.`
-		: `It’s your turn in game ${gameId}.`;
-	await notifyUsers([t.user_id], { title: pen ? `Draw ${pen.amount}! Your turn` : 'Your turn', body, url: `/game/${gameId}`, tag: `turn-${gameId}` });
+/** Ring: everyone invited to a new call. Short TTL: a ring that arrives a minute late is useless. */
+export async function alertIncomingCall(callId: string, callerId: string): Promise<void> {
+	if (!pushConfigured()) return;
+	try {
+		const ctx = await callContext(callId);
+		if (!ctx) return;
+		const { data: invited } = await adminSupabase().from('call_participants').select('user_id').eq('call_id', callId).eq('state', 'invited');
+		const ids = (invited || []).map(r => r.user_id).filter(id => id !== callerId);
+		await sendTo(ids, incomingCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName }), { ttl: 45, urgency: 'high' });
+	} catch (e) { console.error('[push] call', (e as Error).message); }
 }
 
-/** "Game over" — to everyone at the table who isn't watching it: who won and how. */
-export async function alertFinished(gameId: number): Promise<void> {
-	const rows = await sql<{ user_id: number; final_rank: number | null; finished: { how: string; by: number | null; standings: { id: number; rank: number }[] } | null }[]>`
-		select p.user_id, p.final_rank, g.state->'finished' as finished from game_players p
-		join users u on u.id = p.user_id join games g on g.id = p.game_id
-		where p.game_id = ${gameId} and g.status = 'finished' and not u.is_bot and p.left_at is null
-		  and p.last_seen < now() - interval '25 seconds'`.catch(() => [] as never[]);
-	if (!rows.length || !rows[0].finished) return;
-	const f = rows[0].finished;
-	const winnerIds = f.standings.filter(s => s.rank === 1).map(s => s.id);
-	const names = await sql<{ id: number; username: string }[]>`select id, username from users where id in ${sql(winnerIds)}`.catch(() => [] as never[]);
-	const winners = names.map(n => n.username).join(' & ') || 'Someone';
-	const how = f.how === 'cut' ? 'after a cut' : f.how === 'out' ? 'by going out' : 'on points';
-	await Promise.all(rows.map(r => notifyUsers([r.user_id], {
-		title: r.final_rank === 1 ? 'You won! 🏆' : `${winners} won`,
-		body: r.final_rank === 1 ? `You won game ${gameId} ${how}.` : `Game ${gameId} is over (${how}). You came ${ordinal(r.final_rank ?? 0)}.`,
-		url: `/game/${gameId}`, tag: `turn-${gameId}`,
-	})));
+export async function alertMissed(rows: MissedRow[]): Promise<void> {
+	if (!pushConfigured() || !rows.length) return;
+	const byCall = new Map<string, string[]>();
+	for (const r of rows) byCall.set(r.call_id, [...(byCall.get(r.call_id) || []), r.user_id]);
+	await Promise.all(Array.from(byCall, async ([callId, ids]) => {
+		try {
+			const ctx = await callContext(callId);
+			if (!ctx) return;
+			await sendTo(ids, missedCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName }), { ttl: 86400 });
+		} catch (e) { console.error('[push] missed', (e as Error).message); }
+	}));
 }
 
-const ordinal = (n: number) => (n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`);
-
-/** A test alert to the signed-in player's own phones (Account page). Returns how many phones it reached. */
-export async function alertTest(userId: number): Promise<number> {
-	return notifyUsers([userId], { title: 'PicknPlay alerts work 🎉', body: 'This is how you’ll hear about your turn, invites and results.', url: '/account', tag: 'test' });
-}
-
-/** "Game started" — to everyone at the table who isn't watching the waiting room. */
-export async function alertStarted(gameId: number, hostId: number, hostName: string): Promise<void> {
-	const rows = await sql<{ user_id: number }[]>`
-		select p.user_id from game_players p join users u on u.id = p.user_id
-		where p.game_id = ${gameId} and not u.is_bot and p.user_id <> ${hostId} and p.last_seen < now() - interval '25 seconds'`.catch(() => [] as never[]);
-	if (rows.length) await notifyUsers(rows.map(r => r.user_id), { title: 'Game started', body: `${hostName} started game ${gameId}. Your cards are dealt.`, url: `/game/${gameId}`, tag: `turn-${gameId}` });
+/** Server-side call sweeper (no-answer -> missed, silent -> left) followed by missed-call alerts. */
+export async function sweepCalls(conversationId?: string): Promise<void> {
+	if (!adminConfigured()) return;
+	const { data, error } = await adminSupabase().rpc('expire_calls', { p_conv: conversationId ?? null });
+	if (error) { console.error('[calls] expire', error.message); return; }
+	await alertMissed(data || []);
 }

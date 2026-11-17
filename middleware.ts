@@ -1,41 +1,39 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { COOKIE, readSession } from './lib/session';
+import { supabaseConfigured } from './lib/env';
+import { updateSession } from './lib/supabase/middleware';
 
-const PUBLIC_PAGES = ['/signin', '/signup', '/offline', '/privacy'];
+// Pages anyone may open. Everything else needs a signed-in person (API routes check for themselves).
+const PUBLIC = ['/signin', '/signup', '/forgot', '/privacy', '/setup'];
+const AUTH_ONLY = ['/signin', '/signup', '/forgot'];
 
 export async function middleware(req: NextRequest) {
 	const { pathname } = req.nextUrl;
-	const session = await readSession(req.cookies.get(COOKIE)?.value);
-	const isPublic = PUBLIC_PAGES.includes(pathname);
-	if (!session && !isPublic) {
+	const isPublic = PUBLIC.includes(pathname) || pathname.startsWith('/auth/');
+
+	if (!supabaseConfigured) {
+		if (pathname === '/setup' || pathname === '/privacy') return NextResponse.next();
+		const url = req.nextUrl.clone();
+		url.pathname = '/setup';
+		url.search = '';
+		return NextResponse.redirect(url);
+	}
+
+	const { res, userId } = await updateSession(req);
+	if (!userId && !isPublic) {
 		const url = req.nextUrl.clone();
 		url.pathname = '/signin';
 		url.search = pathname !== '/' ? `?next=${encodeURIComponent(pathname)}` : '';
 		return NextResponse.redirect(url);
 	}
-	// After an admin password reset: choose a new password before anything else
-	if (session?.mustChange && pathname !== '/new-password') {
-		const url = req.nextUrl.clone();
-		url.pathname = '/new-password';
-		url.search = '';
-		return NextResponse.redirect(url);
-	}
-	if (session && !session.mustChange && pathname === '/new-password') {
+	if (userId && AUTH_ONLY.includes(pathname)) {
 		const url = req.nextUrl.clone();
 		url.pathname = '/';
 		url.search = '';
 		return NextResponse.redirect(url);
 	}
-	if (session && (pathname === '/signin' || pathname === '/signup')) {
-		const url = req.nextUrl.clone();
-		url.pathname = '/';
-		url.search = '';
-		return NextResponse.redirect(url);
-	}
-	return NextResponse.next();
+	return res;
 }
 
-// Pages only: API routes check the session themselves; static files are public.
 export const config = {
-	matcher: ['/((?!api|_next/static|_next/image|cards|avatars|icons|sounds|sw.js|manifest.webmanifest|offline.html|favicon.ico).*)'],
+	matcher: ['/((?!api|_next/static|_next/image|icons|sw.js|manifest.webmanifest|offline.html|favicon.ico|robots.txt).*)'],
 };

@@ -1,11 +1,10 @@
-import { fail, json, rateLimited, withUser } from '@/lib/http';
-import { alertTest, pushConfigured } from '@/lib/push';
+import { json, limit, withUser, HttpError } from '@/lib/api';
+import { pushConfigured, sendTo } from '@/lib/push';
 
-// POST: send a test alert to my own phones
-export const POST = withUser(async user => {
-	if (!pushConfigured()) return fail('Phone alerts aren’t set up on this server yet', 503);
-	if (rateLimited(`pushtest:${user.id}`, 3, 60000)) return fail('Wait a minute before sending another test', 429);
-	const sent = await alertTest(user.id);
-	if (!sent) return fail('Alerts aren’t on for any of your phones yet. Switch them on first.', 404);
+// "Send me a test notification" (Settings). Only ever reaches the signed-in person's own devices.
+export const POST = withUser(async ({ db, userId }) => {
+	if (!pushConfigured()) throw new HttpError('Notifications aren’t set up on this server yet', 503);
+	await limit(db, 'push_test', 5, 600);
+	const sent = await sendTo([userId], { title: 'Silo notifications work', body: 'This is how you’ll hear about new messages and calls.', url: '/settings', tag: 'test', kind: 'test' }, { ttl: 120 });
 	return json({ sent });
 });

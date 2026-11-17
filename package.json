@@ -1,12 +1,12 @@
 {
-  "name": "picknplay",
+  "name": "silo",
   "version": "1.0.0",
   "private": true,
-  "description": "PicknPlay — real-time multiplayer shedding card game (Classic & Super). Next.js + PostgreSQL.",
+  "description": "Silo: a private social space for close friends. Direct and group messaging, LiveKit voice calls, Web Push. Next.js + Supabase.",
   "scripts": {
-    "dev": "next dev -p 3010",
+    "dev": "next dev -p 3030",
     "build": "next build",
-    "start": "next start -p 3010",
+    "start": "next start -p 3030",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -14,14 +14,14 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.119.0",
-    "jose": "6.2.17",
     "livekit-client": "2.23.0",
     "livekit-server-sdk": "2.19.2",
     "next": "15.5.29",
-    "postgres": "3.4.9",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "server-only": "0.0.1",
     "web-push": "3.6.7"
   },
   "devDependencies": {
@@ -34,6 +34,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/spearpower/PicknPlay.git"
+    "url": "https://github.com/spearpower/silo.git"
   }
 }

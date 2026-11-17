@@ -1,7 +1,7 @@
 'use client';
-// Shown instead of the blank "client-side exception" page when a screen crashes.
+// Shown instead of a blank screen when a page crashes.
 import { useEffect } from 'react';
-import { isChunkError, reloadForNewVersion, reportError } from '@/lib/report';
+import { isChunkError, reloadForNewVersion, reportError } from '@/lib/client/report';
 
 export default function ErrorScreen({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
 	useEffect(() => {
@@ -9,13 +9,15 @@ export default function ErrorScreen({ error, reset }: { error: Error & { digest?
 		if (isChunkError(error)) reloadForNewVersion();
 	}, [error]);
 	return (
-		<div className="app centered"><main className="center">
-			<div className="brand"><img src="/icons/icon-192.png" alt="" /><h1 className="large-title">Something went wrong</h1></div>
-			<p className="subtitle">Your game is saved. Tap Try Again, or Reload to get the latest version of PicknPlay.</p>
-			<button className="btn btn-primary" type="button" onClick={() => reset()}>Try Again</button>
-			<button className="btn btn-plain" type="button" onClick={() => location.reload()}>Reload</button>
-			<a className="btn btn-plain" href="/">Back to Play</a>
-			<p className="footnote" style={{ marginTop: 16, wordBreak: 'break-word' }}>Error: {error.message || 'unknown'}{error.digest ? ` (${error.digest})` : ''}</p>
-		</main></div>
+		<div className="empty" style={{ minHeight: '60dvh' }}>
+			<img src="/icons/icon-192.png" alt="" width={64} height={64} style={{ borderRadius: 18 }} />
+			<h2>Something went wrong</h2>
+			<p>Your messages are safe. Try again, or reload to get the latest version of Silo.</p>
+			<div className="row">
+				<button className="btn btn-primary" type="button" onClick={() => reset()}>Try again</button>
+				<button className="btn btn-outline" type="button" onClick={() => location.reload()}>Reload</button>
+			</div>
+			{error.digest && <p className="small">Reference: {error.digest}</p>}
+		</div>
 	);
 }

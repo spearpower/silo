@@ -1,17 +1,13 @@
-/* PicknPlay service worker (Next.js build).
- * - Cache-first for hashed build files (/_next/static) and the card/avatar/icon art.
- * - Never caches pages or /api: they carry the signed-in player and live game state.
- * - Navigations fall back to /offline.html when the network is down.
+/* Silo service worker.
+ * - Cache-first for hashed build files (/_next/static) and app icons.
+ * - Never caches pages, /api or Supabase traffic: they carry private, live data.
+ * - Navigations fall back to /offline.html without a network.
+ * - Web Push: shows message / call alerts; tapping opens the right chat.
  * Bump VERSION when the precached files change.
  */
-const VERSION = 'picknplay-v1.1.0';
+const VERSION = 'silo-v1.0.0';
 const STATIC_CACHE = VERSION + '-static';
-
-// Card back and Jokers up front; the 52 face cards are cached the first time they are shown (cache-first below).
-const CARDS = ['/cards/back.svg', '/cards/XR.svg', '/cards/XB.svg'];
-
-const SOUNDS = ['turn', 'chat', 'deal', 'play', 'draw', 'shuffle', 'penalty', 'hit', 'cancel', 'suit', 'skip', 'reverse', 'cut', 'lastcard', 'win', 'lose', 'tick', 'error'].map(n => '/sounds/' + n + '.wav');
-const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'].concat(SOUNDS, CARDS);
+const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
 	event.waitUntil(caches.open(STATIC_CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -20,19 +16,18 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
 	event.waitUntil(
 		caches.keys()
-			.then(keys => Promise.all(keys.filter(k => k.startsWith('picknplay-') && k !== STATIC_CACHE).map(k => caches.delete(k))))
+			.then(keys => Promise.all(keys.filter(k => k !== STATIC_CACHE).map(k => caches.delete(k))))
 			.then(() => self.clients.claim())
 	);
 });
 
-const isStatic = url => url.pathname.startsWith('/_next/static/') || /^\/(cards|avatars|icons|sounds)\//.test(url.pathname) || url.pathname === '/manifest.webmanifest';
+const isStatic = url => url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest';
 
 self.addEventListener('fetch', event => {
 	const req = event.request;
 	if (req.method !== 'GET') return;
 	const url = new URL(req.url);
-	if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-
+	if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
 	if (req.mode === 'navigate') {
 		event.respondWith(fetch(req).catch(() => caches.match('/offline.html')));
 		return;
@@ -49,20 +44,28 @@ self.addEventListener('fetch', event => {
 	}
 });
 
-// ---------- Phone alerts (Web Push) ----------
+// ---------- Web Push ----------
 self.addEventListener('push', event => {
 	let d = {};
-	try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'PicknPlay', body: event.data ? event.data.text() : '' }; }
-	const title = d.title || 'PicknPlay';
-	event.waitUntil(self.registration.showNotification(title, {
-		body: d.body || '',
-		icon: '/icons/icon-192.png',
-		badge: '/icons/icon-192.png',
-		tag: d.tag || undefined,
-		renotify: !!d.tag,
-		vibrate: [90, 60, 90],
-		data: { url: d.url || '/' },
-	}));
+	try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'Silo', body: '' }; }
+	const isCall = d.kind === 'call';
+	event.waitUntil((async () => {
+		// The app shows its own banner and sound when it's open and focused: skip duplicate message alerts then.
+		if (d.kind === 'message') {
+			const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+			if (wins.some(w => w.focused && w.visibilityState === 'visible')) return;
+		}
+		await self.registration.showNotification(d.title || 'Silo', {
+			body: d.body || '',
+			icon: '/icons/icon-192.png',
+			badge: '/icons/icon-192.png',
+			tag: d.tag || undefined,
+			renotify: !!d.tag,
+			requireInteraction: isCall,
+			vibrate: isCall ? [300, 150, 300, 150, 300] : [80, 60, 80],
+			data: { url: d.url || '/' },
+		});
+	})());
 });
 
 self.addEventListener('notificationclick', event => {
