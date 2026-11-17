@@ -2,6 +2,7 @@
 // Browser side of notifications: permission, subscribe this device, tell the server.
 import { api } from './api';
 import { VAPID_PUBLIC_KEY } from '../env';
+import { unregisterAppPush } from './native';
 
 export type PushState = 'unsupported' | 'ios-install' | 'blocked' | 'off' | 'on' | 'not-configured';
 
@@ -46,6 +47,7 @@ export async function disablePush(): Promise<PushState> {
 
 /** On sign-out, detach this device from the account so the next person here doesn't get your alerts. */
 export async function detachDevice() {
+	await unregisterAppPush();
 	try {
 		const reg = await navigator.serviceWorker?.getRegistration();
 		const sub = await reg?.pushManager.getSubscription();

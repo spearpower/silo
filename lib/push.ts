@@ -1,20 +1,25 @@
 import 'server-only';
-// Web Push delivery (VAPID, no third-party service). Runs with the service role because it reads other people's
+// Alerts to browsers (Web Push, VAPID) and to the Silo Android app (Firebase Cloud Messaging).
+// Runs with the service role because it reads other people's
 // subscriptions; every caller has already been authorised by RLS for the action that triggers the alert.
 // Best effort: a failed alert never fails the message or call that caused it.
 import webpush from 'web-push';
 import { adminConfigured, adminSupabase } from './supabase/admin';
 import { incomingCallNotification, messageNotification, missedCallNotification, type PushPayload } from './notify';
 import type { MessageRow, MissedRow } from './database.types';
+import { fcmConfigured, sendFcm } from './fcm';
 
 let ready: boolean | null = null;
-export function pushConfigured(): boolean {
+/** Web Push (browsers) is set up. */
+export function webPushConfigured(): boolean {
 	if (ready !== null) return ready;
 	const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
 	ready = !!(pub && priv && adminConfigured());
 	if (ready) webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', pub!, priv!);
 	return ready;
 }
+/** Any alert channel (browsers or the Android app) is set up. */
+export const pushConfigured = () => webPushConfigured() || (fcmConfigured() && adminConfigured());
 
 /** People seen in the app in the last 30 s get in-app sounds/banners instead of a push. */
 const ACTIVE_MS = 30_000;
@@ -28,6 +33,29 @@ async function activeUsers(ids: string[]): Promise<Set<string>> {
 
 export async function sendTo(userIds: string[], payload: PushPayload, opts: { ttl?: number; urgency?: 'normal' | 'high' } = {}): Promise<number> {
 	if (!userIds.length || !pushConfigured()) return 0;
+	const [web, app] = await Promise.all([sendWeb(userIds, payload, opts), sendApp(userIds, payload, opts.ttl ?? 3600)]);
+	return web + app;
+}
+
+/** Android app phones (FCM, data-only; the app builds the notification). */
+async function sendApp(userIds: string[], payload: PushPayload, ttl: number): Promise<number> {
+	if (!fcmConfigured() || !adminConfigured()) return 0;
+	const admin = adminSupabase();
+	const { data: devices, error } = await admin.from('device_tokens').select('id, token').in('user_id', userIds);
+	if (error) { console.error('[push] device tokens', error.message); return 0; }
+	const data: Record<string, string> = { kind: payload.kind, title: payload.title, body: payload.body, url: payload.url, tag: payload.tag, ...(payload.callId ? { callId: payload.callId } : {}) };
+	let sent = 0;
+	await Promise.all((devices || []).map(async d => {
+		const r = await sendFcm(d.token, data, ttl);
+		if (r === 'sent') sent++;
+		else if (r === 'gone') await admin.from('device_tokens').delete().eq('id', d.id); // app uninstalled / token replaced
+	}));
+	return sent;
+}
+
+/** Browsers (Web Push). */
+async function sendWeb(userIds: string[], payload: PushPayload, opts: { ttl?: number; urgency?: 'normal' | 'high' }): Promise<number> {
+	if (!webPushConfigured()) return 0;
 	const admin = adminSupabase();
 	const { data: subs, error } = await admin.from('push_subscriptions').select('id, endpoint, p256dh, auth').in('user_id', userIds);
 	if (error) { console.error('[push] subscriptions', error.message); return 0; }

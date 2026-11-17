@@ -23,7 +23,7 @@ export default function SettingsPage() {
 			<div className="page-head" style={{ paddingLeft: 0, paddingRight: 0 }}><h1>Settings</h1></div>
 			<ProfileCard />
 			<PrivacyCard settings={settings} />
-			{inApp ? <AndroidAppCard /> : <NotificationsCard settings={settings} />}
+			{inApp ? <AndroidAppCard settings={settings} /> : <NotificationsCard settings={settings} />}
 			<AppearanceCard />
 			<AccountCard />
 			<p className="muted small" style={{ textAlign: 'center', marginTop: 18 }}><Link href="/privacy">Privacy &amp; security</Link> · Silo</p>
@@ -148,8 +148,33 @@ const PUSH_TEXT: Record<PushState, string> = {
 	'not-configured': 'Notifications aren’t set up on this server yet.',
 };
 
+function AppAlertsRow() {
+	const [busy, setBusy] = useState(false);
+	const [note, setNote] = useState('');
+	const test = async () => {
+		setBusy(true); setNote('');
+		try {
+			const r = await api<{ sent: number }>('/api/push/test');
+			setNote(r.sent ? 'Sent. Close or minimise Silo and it should arrive in a moment.' : 'This phone isn’t registered for alerts yet. Allow notifications for Silo, then reopen the app.');
+		} catch (e) { setNote((e as Error).message); } finally { setBusy(false); }
+	};
+	return (
+		<>
+			<div className="switch">
+				<span>
+					<span style={{ fontWeight: 600 }}>Message and call alerts</span>
+					<span className="hint" style={{ display: 'block' }}>Incoming calls ring even when Silo is closed. Turn alerts on or off in Android Settings → Apps → Silo → Notifications.</span>
+				</span>
+				<button className="btn btn-sm btn-outline" type="button" disabled={busy} onClick={() => void test()}>Test</button>
+			</div>
+			{note && <p className="hint" role="status">{note}</p>}
+		</>
+	);
+}
+
 /** Inside the Android app: battery shortcut (keeps calls alive). Phone alerts for the app come in a later update. */
-function AndroidAppCard() {
+function AndroidAppCard({ settings }: { settings: SettingsRow }) {
+	const { save } = useSettingSaver();
 	const [unrestricted, setUnrestricted] = useState<boolean | null>(null);
 	useEffect(() => {
 		const check = () => { try { setUnrestricted(!!nativeApp()?.batteryUnrestricted()); } catch { setUnrestricted(null); } };
@@ -169,7 +194,8 @@ function AndroidAppCard() {
 				</span>
 				<button className="btn btn-sm btn-outline" type="button" onClick={() => nativeApp()?.openBatterySettings()}>Settings</button>
 			</div>
-			<p className="hint" style={{ margin: '8px 0 0' }}>Message and call alerts for the Android app arrive in the next update.</p>
+			<AppAlertsRow />
+			<Toggle label="Show message text in alerts" hint="Off: alerts only say who wrote, not what." checked={settings.push_previews} onChange={v => void save({ push_previews: v })} />
 		</section>
 	);
 }

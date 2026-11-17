@@ -44,6 +44,7 @@ export type CallParticipantRow = {
 export type PushSubscriptionRow = {
 	id: string; user_id: string; endpoint: string; p256dh: string; auth: string; user_agent: string | null; created_at: string; last_used_at: string | null;
 }
+export type DeviceTokenRow = { id: string; user_id: string; token: string; platform: 'android'; app_version: string | null; created_at: string; last_used_at: string | null }
 export type ConversationListRow = {
 	id: string; kind: 'direct' | 'group'; title: string | null; photo_url: string | null; created_at: string; last_message_at: string | null;
 	my_role: 'owner' | 'admin' | 'member'; muted_until: string | null; member_count: number;
@@ -71,6 +72,7 @@ export type Database = {
 			user_reports: Table<ReportRow>;
 			call_sessions: Table<CallRow>;
 			call_participants: Table<CallParticipantRow>;
+			device_tokens: Table<DeviceTokenRow, Pick<DeviceTokenRow, 'user_id' | 'token'> & Partial<DeviceTokenRow>>;
 			push_subscriptions: Table<PushSubscriptionRow, Pick<PushSubscriptionRow, 'user_id' | 'endpoint' | 'p256dh' | 'auth'> & Partial<PushSubscriptionRow>>;
 		};
 		Views: { [_ in never]: never };

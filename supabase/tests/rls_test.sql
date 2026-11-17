@@ -257,6 +257,18 @@ select silo_test.ok(silo_test.count('select * from public.push_subscriptions') =
 delete from public.push_subscriptions;
 reset role;
 select silo_test.ok((select count(*) from public.push_subscriptions) = 1, 'bob cannot delete alice''s subscription');
+\echo '--- Android app tokens'
+select silo_test.login('alice');
+insert into public.device_tokens (user_id, token) values (silo_test.uid('alice'), 'fcm-token-alice-0123456789abcdef');
+select silo_test.fails('insert into public.device_tokens (user_id, token) values (silo_test.uid(''bob''), ''fcm-token-bob-0123456789abcdef'')', 'alice cannot register a phone for bob');
+select silo_test.fails('update public.device_tokens set user_id = silo_test.uid(''bob'')', 'app tokens cannot be moved to someone else');
+select silo_test.login('bob');
+select silo_test.ok(silo_test.count('select * from public.device_tokens') = 0, 'bob cannot see alice''s app token');
+delete from public.device_tokens;
+select silo_test.anon();
+select silo_test.fails('select * from public.device_tokens', 'anon cannot read app tokens');
+reset role;
+select silo_test.ok((select count(*) from public.device_tokens) = 1, 'bob cannot delete alice''s app token');
 select silo_test.login('alice');
 select silo_test.fails('select * from public.rate_limits', 'rate limit table is server-only');
 

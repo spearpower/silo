@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Avatar from '@/components/Avatar';
 import Icon from '@/components/Icon';
@@ -8,7 +8,8 @@ import {
 	discardMessage, loadOlder, onCallChange, onResync, openConversation, receiptOf, retryMessage, sendMessage, sendTyping,
 	typingNames, useStore, type UiMessage,
 } from '@/lib/client/store';
-import { joinGroupCall, presentIncoming, startCall, useCall } from '@/lib/client/calls';
+import { acceptCall, joinGroupCall, presentIncoming, startCall, useCall } from '@/lib/client/calls';
+import { api } from '@/lib/client/api';
 import { supabase } from '@/lib/supabase/browser';
 import { dayLabel, lastSeenText, timeOf } from '@/lib/format';
 import { MAX_MESSAGE } from '@/lib/validate';
@@ -43,11 +44,16 @@ export default function ConversationPage() {
 
 	useEffect(() => openConversation(id), [id]);
 
-	// Arrived from a call notification: show the ringing sheet (or join banner) for that call.
+	// Arrived from a call notification: ring (tap), answer straight away (Answer button), or decline.
+	const router = useRouter();
 	useEffect(() => {
 		const callId = search.get('call');
-		if (callId && s.meId) void presentIncoming(callId);
-	}, [search, s.meId]);
+		if (!callId || !s.meId) return;
+		const answer = search.get('answer') === '1', decline = search.get('decline') === '1';
+		if (answer || decline) router.replace(`/c/${id}`); // don't repeat it on reload
+		if (decline) { void api(`/api/calls/${callId}/decline`, {}).catch(() => {}); return; }
+		void presentIncoming(callId).then(() => { if (answer) void acceptCall(); });
+	}, [search, s.meId, id, router]);
 
 	const conv = s.conv;
 	const other = conv?.kind === 'direct' ? conv.other_id : null;

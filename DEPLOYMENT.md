@@ -78,6 +78,16 @@ Browser support:
 
 Notifications need the user to tap **Settings → Notifications** and allow them in the browser prompt.
 
+## 3b. Android app notifications (Firebase)
+
+The Silo Android app lives in a separate project (`silomob`). Its notifications use Firebase Cloud Messaging:
+
+1. Firebase console → **Project settings → Service accounts → Generate new private key**. A JSON file downloads; keep it private.
+2. Put its contents in the `FIREBASE_SERVICE_ACCOUNT` environment variable, in Vercel and in `.env.local`. Paste the JSON on one line, or base64-encode it.
+3. Apply migration `20261118000600_silo_device_tokens.sql` if it isn't applied yet.
+
+Without the variable, browser notifications keep working and the app simply gets no alerts.
+
 ## 4. Environment variables
 
 | Name | Where it's used | Secret? |
@@ -89,6 +99,7 @@ Notifications need the user to tap **Settings → Notifications** and allow them
 | `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | server only: signs call tokens | **yes** (secret) |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | browser: subscribes the device | no |
 | `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | server only: sends pushes | **yes** (private key) |
+| `FIREBASE_SERVICE_ACCOUNT` | server only: sends Android app notifications through Firebase (service-account JSON, or base64 of it) | **yes** |
 | `CRON_SECRET` | server: protects `/api/cron/daily` | **yes** |
 | `NEXT_PUBLIC_SITE_URL` | optional | no |
 

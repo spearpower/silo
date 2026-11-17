@@ -12,6 +12,7 @@ import { supabase } from '../supabase/browser';
 import type { ConversationListRow, MessageRow, ProfileRow, SettingsRow, ParticipantRow, CallRow, CallParticipantRow } from '../database.types';
 import { api, dbMessage } from './api';
 import { messageBlip } from './sound';
+import { registerAppPush } from './native';
 export { receiptOf } from '../receipts';
 
 export type Person = Pick<ProfileRow, 'id' | 'username' | 'display_name' | 'avatar_url'>;
@@ -79,6 +80,7 @@ export async function boot() {
 	set({ ready: true });
 	subscribeDb();
 	joinOnline();
+	registerAppPush(); // Android app: register this phone for notifications
 	heartbeat();
 	setInterval(() => { if (document.visibilityState === 'visible') heartbeat(); }, 25_000);
 	sb().auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') location.href = '/signin'; });
