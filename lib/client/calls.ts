@@ -8,6 +8,7 @@ import { supabase } from '../supabase/browser';
 import { api, ApiError } from './api';
 import { getState, onCallChange, onResync } from './store';
 import { haptic, startRingback, startRinging, stopRinging, unlockAudio } from './sound';
+import { setKeepAliveMuted, startKeepAlive, stopKeepAlive } from './callKeepAlive';
 
 export type CallPhase = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active' | 'reconnecting' | 'ended';
 export interface CallMember { id: string; name: string; speaking: boolean; muted: boolean; me: boolean; connected: boolean }
@@ -116,6 +117,8 @@ async function connect(url: string, token: string) {
 	await r.startAudio().catch(() => {});
 	await r.localParticipant.setMicrophoneEnabled(true);
 	refresh();
+	// keep the screen awake and tell the phone a call is running (until finish())
+	startKeepAlive(state.title || 'Voice call', { hangUp: () => void hangUp(), toggleMute: () => void toggleMute() });
 }
 
 function startPings() {
@@ -140,6 +143,7 @@ function stopPings() { if (pingTimer) { clearInterval(pingTimer); pingTimer = nu
 /** Local tear-down (no server call). Shows the reason briefly, then returns to idle. */
 async function finish(notice: string) {
 	stopRinging();
+	stopKeepAlive();
 	stopPings();
 	if (ringTimer) { clearTimeout(ringTimer); ringTimer = null; }
 	const r = room;
@@ -230,6 +234,7 @@ export async function toggleMute() {
 	if (!r) return;
 	const next = !state.muted;
 	await r.localParticipant.setMicrophoneEnabled(!next);
+	setKeepAliveMuted(next);
 	haptic(8);
 	set({ muted: next, members: readMembers(r) });
 }
