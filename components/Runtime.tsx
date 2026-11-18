@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import Icon from './Icon';
 import { hideToast, useStore } from '@/lib/client/store';
-import { acceptCall, declineCall, hangUp, setMinimized, toggleMute, useCall, type CallState } from '@/lib/client/calls';
+import { acceptCall, declineCall, hangUp, setMinimized, toggleMute, toggleSpeaker, useCall, type CallState } from '@/lib/client/calls';
 import { duration } from '@/lib/format';
 
 /** Everything that floats above the pages: call screens, the incoming-call banner, toasts, connection state. */
@@ -115,6 +115,11 @@ function CallLayer() {
 				<button className={`call-ctl${c.muted ? ' on' : ''}`} type="button" onClick={() => void toggleMute()} disabled={c.phase === 'ended' || c.phase === 'connecting'} aria-pressed={c.muted}>
 					<span className="disc"><Icon name={c.muted ? 'micOff' : 'mic'} /></span>{c.muted ? 'Unmute' : 'Mute'}
 				</button>
+				{c.speaker !== null && (
+					<button className={`call-ctl${c.speaker ? ' on' : ''}`} type="button" onClick={toggleSpeaker} disabled={c.phase === 'ended'} aria-pressed={c.speaker}>
+						<span className="disc"><Icon name="speaker" /></span>{c.speaker ? 'Speaker on' : 'Speaker'}
+					</button>
+				)}
 				<button className="call-ctl end" type="button" onClick={() => void hangUp()} disabled={c.phase === 'ended'}>
 					<span className="disc"><Icon name="phoneDown" /></span>{c.phase === 'outgoing' ? 'Cancel' : 'End'}
 				</button>

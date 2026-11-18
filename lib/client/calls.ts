@@ -9,6 +9,7 @@ import { api, ApiError } from './api';
 import { getState, onCallChange, onResync } from './store';
 import { haptic, startRingback, startRinging, stopRinging, unlockAudio } from './sound';
 import { setKeepAliveMuted, startKeepAlive, stopKeepAlive } from './callKeepAlive';
+import { canSwitchSpeaker, nativeSetSpeaker, nativeSpeakerOn, onNativeSpeaker } from './native';
 
 export type CallPhase = 'idle' | 'outgoing' | 'incoming' | 'connecting' | 'active' | 'reconnecting' | 'ended';
 export interface CallMember { id: string; name: string; speaking: boolean; muted: boolean; me: boolean; connected: boolean }
@@ -22,11 +23,12 @@ export interface CallState {
 	answeredAt: number | null;
 	muted: boolean;
 	members: CallMember[];
+	speaker: boolean | null; // loudspeaker on/off; null = this device can't switch (browsers)
 	notice: string;         // "No answer", "Call declined", mic problems...
 	minimized: boolean;
 }
 
-const idle: CallState = { phase: 'idle', callId: null, conversationId: null, kind: 'direct', title: '', callerName: '', answeredAt: null, muted: false, members: [], notice: '', minimized: false };
+const idle: CallState = { phase: 'idle', callId: null, conversationId: null, kind: 'direct', title: '', callerName: '', answeredAt: null, muted: false, speaker: null, members: [], notice: '', minimized: false };
 let state: CallState = idle;
 const listeners = new Set<() => void>();
 function set(p: Partial<CallState>) { state = { ...state, ...p }; listeners.forEach(l => l()); }
@@ -119,6 +121,10 @@ async function connect(url: string, token: string) {
 	refresh();
 	// keep the screen awake and tell the phone a call is running (until finish())
 	startKeepAlive(state.title || 'Voice call', { hangUp: () => void hangUp(), toggleMute: () => void toggleMute() });
+	if (canSwitchSpeaker()) {
+		onNativeSpeaker(on => set({ speaker: on }));
+		set({ speaker: nativeSpeakerOn() ?? true });
+	}
 }
 
 function startPings() {
@@ -240,6 +246,15 @@ export async function toggleMute() {
 }
 
 export const setMinimized = (minimized: boolean) => set({ minimized });
+
+/** Loudspeaker on/off (Android app). The app confirms the new route through onNativeSpeaker. */
+export function toggleSpeaker() {
+	if (state.speaker === null) return;
+	const next = !state.speaker;
+	nativeSetSpeaker(next);
+	set({ speaker: next });
+	haptic(8);
+}
 
 // ---------------------------------------------------------------- incoming calls
 

@@ -2,7 +2,8 @@
 // Client-side state for the signed-in app: my profile, chat list, open threads, members, online people, typing.
 // One Realtime connection carries everything:
 //   - postgres_changes on messages / call_sessions / call_participants (each row filtered by RLS for this person)
-//   - private broadcast channel per open chat ('conv:<id>') for typing + read pings (members only, see RLS)
+//   - private broadcast channel per recent chat ('conv:<id>') for typing + read pings (members only, see RLS);
+//     kept open (not re-created on every visit) so typing shows in the chat list too
 //   - presence channel 'online'
 // After a dropped connection or when the app comes back to the foreground, everything is re-fetched (resync),
 // so nothing is lost while Realtime was down.
@@ -32,6 +33,7 @@ export interface State {
 	people: Record<string, Person>;
 	online: Record<string, true>;
 	typing: Record<string, Record<string, number>>;
+	quotes: Record<string, MessageRow | null>; // quoted messages not in the loaded page (null = not visible / deleted)
 	connection: 'connecting' | 'live' | 'offline';
 	openConv: string | null;
 	toast: { id: number; text: string; href?: string } | null;
@@ -39,7 +41,7 @@ export interface State {
 
 let state: State = {
 	ready: false, meId: null, me: null, settings: null, convs: null, convError: null, threads: {}, members: {}, people: {},
-	online: {}, typing: {}, connection: 'connecting', openConv: null, toast: null,
+	online: {}, typing: {}, quotes: {}, connection: 'connecting', openConv: null, toast: null,
 };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State> | ((s: State) => Partial<State>)) {
@@ -121,6 +123,7 @@ export async function loadConversations() {
 	const open = state.openConv;
 	set({ convs: rows.map(r => (r.id === open && document.visibilityState === 'visible' ? { ...r, unread: 0 } : r)), convError: null });
 	remember(rows.filter(r => r.other_id).map(r => ({ id: r.other_id!, username: r.other_username!, display_name: r.other_display_name!, avatar_url: r.other_avatar_url })));
+	syncConvChannels();
 }
 
 function subscribeDb() {
@@ -220,6 +223,23 @@ export async function loadLatest(conv: string) {
 		hasMore: t.loaded ? t.hasMore : rows.length === PAGE, loading: false, loaded: true, error: null,
 	}));
 	void ensurePeople(rows.map(r => r.sender_id));
+	void ensureQuotes(conv);
+}
+
+/** Load messages that replies point at but that aren't in the loaded page (older history). RLS applies. */
+export async function ensureQuotes(conv: string) {
+	const t = state.threads[conv];
+	if (!t) return;
+	const have = new Set(t.items.map(m => m.id));
+	const missing = Array.from(new Set(t.items.map(m => m.reply_to_id).filter((x): x is string => !!x && !have.has(x) && !(x in state.quotes))));
+	if (!missing.length) return;
+	const { data } = await sb().from('messages').select('*').in('id', missing);
+	set(s => {
+		const quotes = { ...s.quotes };
+		for (const id of missing) quotes[id] = data?.find(r => r.id === id) ?? null;
+		return { quotes };
+	});
+	void ensurePeople((data || []).map(r => r.sender_id));
 }
 
 export async function loadOlder(conv: string) {
@@ -235,10 +255,14 @@ export async function loadOlder(conv: string) {
 	const rows = (data || []).reverse();
 	patchThread(conv, x => ({ items: merge(x.items, rows), hasMore: rows.length === PAGE, loading: false }));
 	void ensurePeople(rows.map(r => r.sender_id));
+	void ensureQuotes(conv);
 }
 
 function onMessage(m: MessageRow) {
-	if (state.threads[m.conversation_id]?.loaded) patchThread(m.conversation_id, t => ({ items: merge(t.items, [m]) }));
+	if (state.threads[m.conversation_id]?.loaded) {
+		patchThread(m.conversation_id, t => ({ items: merge(t.items, [m]) }));
+		if (m.reply_to_id) void ensureQuotes(m.conversation_id);
+	}
 	refreshConversationsSoon();
 	void ensurePeople([m.sender_id]);
 	if (m.sender_id && m.sender_id !== state.meId) {
@@ -265,14 +289,17 @@ function onMessage(m: MessageRow) {
 
 // ---------------------------------------------------------------- sending
 
-export async function sendMessage(conv: string, text: string, clientId = crypto.randomUUID()) {
+export async function sendMessage(conv: string, text: string, opts: { clientId?: string; replyTo?: string | null } = {}) {
+	const clientId = opts.clientId || crypto.randomUUID();
+	const replyTo = opts.replyTo || null;
 	const temp: UiMessage = {
 		id: `tmp-${clientId}`, conversation_id: conv, sender_id: state.meId, kind: 'text', body: text, client_id: clientId,
-		meta: null, created_at: new Date().toISOString(), pending: true,
+		meta: null, created_at: new Date().toISOString(), reply_to_id: replyTo, pending: true,
 	};
 	patchThread(conv, t => ({ items: [...t.items.filter(m => m.client_id !== clientId), temp] }));
+	sendTyping(conv, true); // stop the "typing…" on the other side straight away
 	try {
-		const { message } = await api<{ message: MessageRow }>('/api/messages', { conversationId: conv, body: text, clientId });
+		const { message } = await api<{ message: MessageRow }>('/api/messages', { conversationId: conv, body: text, clientId, replyTo });
 		patchThread(conv, t => ({ items: merge(t.items, [message]) }));
 		refreshConversationsSoon();
 	} catch (e) {
@@ -281,7 +308,7 @@ export async function sendMessage(conv: string, text: string, clientId = crypto.
 }
 
 export function retryMessage(conv: string, m: UiMessage) {
-	if (m.client_id) void sendMessage(conv, m.body, m.client_id);
+	if (m.client_id) void sendMessage(conv, m.body, { clientId: m.client_id, replyTo: m.reply_to_id });
 }
 export function discardMessage(conv: string, m: UiMessage) {
 	patchThread(conv, t => ({ items: t.items.filter(x => x.id !== m.id) }));
@@ -303,39 +330,72 @@ export async function loadMembers(conv: string) {
 	set(s => ({ members: { ...s.members, [conv]: members } }));
 }
 
-let convChannel: { conv: string; ch: RealtimeChannel } | null = null;
-let lastTyping = 0;
+const convChannels = new Map<string, RealtimeChannel>();
+const MAX_CONV_CHANNELS = 30; // the most recent chats (plus the open one) get live typing / read pings
+const lastTyping = new Map<string, number>();
 
-/** Called by the chat screen: loads it, joins its private channel, marks it read. Returns a cleanup. */
+function onTyping(conv: string, payload: unknown) {
+	const p = payload as { u?: string; stop?: boolean } | undefined;
+	const u = p?.u;
+	if (!u || u === state.meId) return;
+	set(s => {
+		const t = { ...(s.typing[conv] || {}) };
+		if (p?.stop) delete t[u]; else t[u] = Date.now() + 6000;
+		return { typing: { ...s.typing, [conv]: t } };
+	});
+	if (!p?.stop) setTimeout(() => set(s => ({ typing: { ...s.typing } })), 6100); // re-render so it expires
+}
+
+function ensureConvChannel(conv: string): RealtimeChannel {
+	const existing = convChannels.get(conv);
+	if (existing) return existing;
+	const ch = sb().channel(`conv:${conv}`, { config: { private: true, broadcast: { self: false } } })
+		.on('broadcast', { event: 'typing' }, ({ payload }) => onTyping(conv, payload))
+		.on('broadcast', { event: 'read' }, () => { if (state.members[conv]) void loadMembers(conv); })
+		.subscribe();
+	convChannels.set(conv, ch);
+	return ch;
+}
+
+/** Keep channels open for the recent chats (and the open one); close the rest. */
+function syncConvChannels() {
+	const wanted = new Set((state.convs || []).slice(0, MAX_CONV_CHANNELS).map(c => c.id));
+	if (state.openConv) wanted.add(state.openConv);
+	for (const conv of wanted) ensureConvChannel(conv);
+	for (const [conv, ch] of convChannels) {
+		if (!wanted.has(conv)) { convChannels.delete(conv); void sb().removeChannel(ch); }
+	}
+}
+
+/** Called by the chat screen: loads it, makes sure its private channel is open, marks it read. Returns a cleanup. */
 export function openConversation(conv: string): () => void {
 	set({ openConv: conv });
 	void loadLatest(conv); // first load, or catch up on anything missed while elsewhere
 	void loadMembers(conv);
+	ensureConvChannel(conv);
 	markReadSoon(conv);
-	const ch = sb().channel(`conv:${conv}`, { config: { private: true, broadcast: { self: false } } })
-		.on('broadcast', { event: 'typing' }, ({ payload }) => {
-			const u = (payload as { u?: string })?.u;
-			if (!u || u === state.meId) return;
-			set(s => ({ typing: { ...s.typing, [conv]: { ...(s.typing[conv] || {}), [u]: Date.now() + 5000 } } }));
-			setTimeout(() => set(s => ({ typing: { ...s.typing } })), 5100); // re-render so it expires
-		})
-		.on('broadcast', { event: 'read' }, () => { void loadMembers(conv); })
-		.subscribe();
-	convChannel = { conv, ch };
 	const onVisible = () => { if (document.visibilityState === 'visible') markReadSoon(conv); };
 	document.addEventListener('visibilitychange', onVisible);
 	return () => {
 		document.removeEventListener('visibilitychange', onVisible);
-		void sb().removeChannel(ch);
-		if (convChannel?.ch === ch) convChannel = null;
+		sendTyping(conv, true);
 		if (state.openConv === conv) set({ openConv: null });
 	};
 }
 
-export function sendTyping(conv: string) {
-	if (!convChannel || convChannel.conv !== conv || Date.now() - lastTyping < 2500) return;
-	lastTyping = Date.now();
-	void convChannel.ch.send({ type: 'broadcast', event: 'typing', payload: { u: state.meId } });
+/** "I'm typing" (throttled to one ping every 2.5 s), or stop=true when the text is sent or cleared. */
+export function sendTyping(conv: string, stop = false) {
+	const ch = convChannels.get(conv);
+	if (!ch) return;
+	const last = lastTyping.get(conv) || 0;
+	if (stop) {
+		if (!last) return; // nothing to stop
+		lastTyping.delete(conv);
+	} else {
+		if (Date.now() - last < 2500) return;
+		lastTyping.set(conv, Date.now());
+	}
+	void ch.send({ type: 'broadcast', event: 'typing', payload: { u: state.meId, ...(stop ? { stop: true } : {}) } });
 }
 
 export function typingNames(conv: string, s: State): string[] {
@@ -351,7 +411,7 @@ function markReadSoon(conv: string) {
 		if (document.visibilityState !== 'visible') return;
 		await sb().rpc('mark_read', { p_conv: conv });
 		set(s => ({ convs: s.convs?.map(c => (c.id === conv ? { ...c, unread: 0 } : c)) ?? null }));
-		if (convChannel?.conv === conv) void convChannel.ch.send({ type: 'broadcast', event: 'read', payload: {} });
+		void convChannels.get(conv)?.send({ type: 'broadcast', event: 'read', payload: {} });
 	}, 400);
 }
 

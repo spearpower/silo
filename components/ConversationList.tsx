@@ -17,7 +17,8 @@ function preview(c: ConversationListRow, meId: string | null): string {
 
 export default function ConversationList({ kind }: { kind: 'direct' | 'group' }) {
 	const path = usePathname();
-	const { convs, convError, meId, online } = useStore(s => ({ convs: s.convs, convError: s.convError, meId: s.meId, online: s.online }));
+	const { convs, convError, meId, online, typing, people } = useStore(s => ({ convs: s.convs, convError: s.convError, meId: s.meId, online: s.online, typing: s.typing, people: s.people }));
+	const typers = (conv: string) => { const now = Date.now(); return Object.entries(typing[conv] || {}).filter(([, t]) => t > now).map(([u]) => people[u]?.display_name || 'Someone'); };
 	const [q, setQ] = useState('');
 	const rows = useMemo(() => {
 		const all = (convs || []).filter(c => c.kind === kind);
@@ -75,7 +76,12 @@ export default function ConversationList({ kind }: { kind: 'direct' | 'group' })
 										online={c.kind === 'direct' && !!c.other_id && !!online[c.other_id]} group={c.kind === 'group'} />
 									<div className="grow">
 										<div className="name ellipsis">{name}</div>
-										<div className={`preview ellipsis${unread ? ' unread' : ''}`}>{preview(c, meId)}</div>
+										{(() => {
+											const t = typers(c.id);
+											return t.length
+												? <div className="preview ellipsis typing">{c.kind === 'group' ? `${t.join(', ')} ${t.length > 1 ? 'are' : 'is'} typing…` : 'typing…'}</div>
+												: <div className={`preview ellipsis${unread ? ' unread' : ''}`}>{preview(c, meId)}</div>;
+										})()}
 									</div>
 									<div className="meta">
 										<span className={`stamp${unread ? ' unread' : ''}`}>{listStamp(c.last_created_at || c.created_at)}</span>

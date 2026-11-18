@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Avatar from '@/components/Avatar';
 import Icon from '@/components/Icon';
+import SwipeToReply from '@/components/SwipeToReply';
 import {
 	discardMessage, loadOlder, onCallChange, onResync, openConversation, receiptOf, retryMessage, sendMessage, sendTyping,
 	typingNames, useStore, type UiMessage,
@@ -29,10 +30,11 @@ export default function ConversationPage() {
 	const s = useStore(st => ({
 		meId: st.meId, conv: st.convs?.find(c => c.id === id) ?? null, convsLoaded: !!st.convs,
 		thread: st.threads[id], members: st.members[id], people: st.people, online: st.online,
-		typing: typingNames(id, st).join(','),
+		typing: typingNames(id, st).join(','), quotes: st.quotes,
 	}));
 	const callPhase = useCall(c => (c.conversationId === id ? c.phase : 'idle'));
 	const [text, setText] = useState('');
+	const [replyTo, setReplyTo] = useState<UiMessage | null>(null);
 	const [lastSeen, setLastSeen] = useState<string | null>(null);
 	const [iBlocked, setIBlocked] = useState(false);
 	const [liveCall, setLiveCall] = useState<{ id: string; status: string; kind: string } | null>(null);
@@ -42,7 +44,7 @@ export default function ConversationPage() {
 	const prevHeight = useRef(0);
 	const loadingOlder = useRef(false);
 
-	useEffect(() => openConversation(id), [id]);
+	useEffect(() => { setReplyTo(null); return openConversation(id); }, [id]);
 
 	// Arrived from a call notification: ring (tap), answer straight away (Answer button), or decline.
 	const router = useRouter();
@@ -106,24 +108,42 @@ export default function ConversationPage() {
 		const t = text.trim();
 		if (!t || t.length > MAX_MESSAGE) return;
 		nearBottom.current = true;
-		void sendMessage(id, t);
+		void sendMessage(id, t, { replyTo: replyTo && !replyTo.pending && !replyTo.failed ? replyTo.id : null });
 		setText('');
+		setReplyTo(null);
 		requestAnimationFrame(() => { if (box.current) { box.current.style.height = ''; box.current.focus(); } });
 	};
 
 	const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		const touch = window.matchMedia('(pointer: coarse)').matches;
 		if (e.key === 'Enter' && !e.shiftKey && !touch && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+		if (e.key === 'Escape' && replyTo) { e.preventDefault(); setReplyTo(null); }
 	};
 
 	const onInput = (v: string) => {
 		setText(v);
-		if (v.trim()) sendTyping(id);
+		if (v.trim()) sendTyping(id); else sendTyping(id, true);
 		const el = box.current;
 		if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
 	};
 
+	const startReply = useCallback((m: UiMessage) => {
+		setReplyTo(m);
+		requestAnimationFrame(() => box.current?.focus());
+	}, []);
+
+	/** Scroll to a quoted message (if it's loaded) and flash it. */
+	const jumpTo = useCallback((msgId: string) => {
+		const el = document.getElementById(`m-${msgId}`);
+		if (!el) return;
+		el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		el.classList.remove('flash');
+		void el.offsetWidth;
+		el.classList.add('flash');
+	}, []);
+
 	const rendered = useMemo(() => {
+		const byId = new Map((items || []).map(m => [m.id, m]));
 		const out: React.ReactNode[] = [];
 		const list = items || [];
 		let lastDay = '';
@@ -142,12 +162,23 @@ export default function ConversationPage() {
 			const mine = m.sender_id === s.meId;
 			const person = m.sender_id ? s.people[m.sender_id] : null;
 			const name = person?.display_name || 'Deleted account';
+			const quoted = m.reply_to_id ? (byId.get(m.reply_to_id) ?? s.quotes[m.reply_to_id]) : undefined;
+			const canReply = !m.pending && !m.failed;
 			out.push(
-				<div key={m.client_id || m.id} className={`msg${mine ? ' me' : ''}${first ? ' first gap' : ''}${m.failed ? ' failed' : ''}`}>
+				<SwipeToReply key={m.client_id || m.id} onReply={() => startReply(m)} disabled={!canReply}
+					className={`msg${mine ? ' me' : ''}${first ? ' first gap' : ''}${m.failed ? ' failed' : ''}`}>
 					{conv?.kind === 'group' && !mine && (first ? <Avatar id={m.sender_id} name={name} url={person?.avatar_url} size={30} /> : <span className="spacer-av" />)}
-					<div>
+					<div id={`m-${m.id}`} className="msg-body">
 						<div className="bubble">
 							{conv?.kind === 'group' && !mine && first && <span className="sender">{name}</span>}
+							{m.reply_to_id && (
+								quoted
+									? <button type="button" className="quote" onClick={() => jumpTo(quoted.id)} aria-label="Go to the quoted message">
+										<b>{quoted.sender_id === s.meId ? 'You' : s.people[quoted.sender_id || '']?.display_name || 'Deleted account'}</b>
+										<span>{quoted.body}</span>
+									</button>
+									: <span className="quote gone">{quoted === null ? 'Message not available' : '…'}</span>
+							)}
 							{m.body}
 							<span className="foot">{timeOf(m.created_at)}{mine && <Tick state={receiptOf(m, s.members, s.meId)} />}</span>
 						</div>
@@ -159,11 +190,12 @@ export default function ConversationPage() {
 							</div>
 						)}
 					</div>
-				</div>,
+					{canReply && <button type="button" className="reply-btn" onClick={() => startReply(m)} aria-label={`Reply to ${mine ? 'your message' : name}`} title="Reply"><Icon name="reply" className="icon sm" /></button>}
+				</SwipeToReply>,
 			);
 		});
 		return out;
-	}, [items, s.meId, s.people, s.members, conv?.kind, id]);
+	}, [items, s.meId, s.people, s.members, s.quotes, conv?.kind, id, startReply, jumpTo]);
 
 	// ----- header text
 	const title = conv ? (conv.kind === 'group' ? conv.title || 'Group' : conv.other_display_name || 'Deleted account') : '';
@@ -234,21 +266,37 @@ export default function ConversationPage() {
 					</div>
 				)}
 				{rendered}
-			</div>
-
-			<div className="typing" aria-hidden={!typing.length}>
-				{typing.length > 0 && <><span className="dots"><span /><span /><span /></span> {conv?.kind === 'group' ? `${typing.join(', ')} typing` : 'typing'}</>}
+				{typing.length > 0 && (
+					<div className="msg typing-bubble" aria-live="polite">
+						<div className="bubble">
+							{conv?.kind === 'group' && <span className="sender">{typing.join(', ')}</span>}
+							<span className="dots" aria-label={`${conv?.kind === 'group' ? typing.join(', ') : title} is typing`}><span /><span /><span /></span>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{iBlocked ? (
 				<div className="blocked-note">You blocked {title}. <Link href={`/c/${id}/info`}>Unblock</Link> to send messages.</div>
 			) : (
+				<>
+				{replyTo && (
+					<div className="reply-bar" role="status">
+						<Icon name="reply" className="icon sm" />
+						<div className="quote grow">
+							<b>Replying to {replyTo.sender_id === s.meId ? 'yourself' : s.people[replyTo.sender_id || '']?.display_name || 'Deleted account'}</b>
+							<span>{replyTo.body}</span>
+						</div>
+						<button className="icon-btn" type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><Icon name="close" className="icon sm" /></button>
+					</div>
+				)}
 				<form className="composer" onSubmit={e => { e.preventDefault(); send(); }}>
 					<label htmlFor="composer" className="sr-only">Message</label>
 					<textarea id="composer" ref={box} rows={1} value={text} maxLength={MAX_MESSAGE} placeholder="Message"
 						onChange={e => onInput(e.target.value)} onKeyDown={onKey} enterKeyHint="send" autoComplete="off" />
 					<button className="send-btn" type="submit" disabled={!text.trim()} aria-label="Send"><Icon name="send" /></button>
 				</form>
+				</>
 			)}
 		</div>
 	);

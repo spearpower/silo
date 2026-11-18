@@ -123,6 +123,19 @@ select silo_test.fails('insert into public.messages (conversation_id, sender_id,
 select silo_test.fails('insert into public.conversation_participants (conversation_id, user_id) values ((select id from t where k = ''ab''), silo_test.uid(''carol''))', 'carol cannot add herself to it');
 select silo_test.ok(silo_test.count('select * from public.conversation_reads') = 0, 'carol cannot see read markers');
 
+\echo '--- replies'
+select silo_test.login('bob');
+insert into t select 'reply', (public.send_message((select id from t where k = 'ab'), 'replying', null,
+	(select id from public.messages where conversation_id = (select id from t where k = 'ab') and body = 'hello bob'))).id;
+select silo_test.ok((select reply_to_id from public.messages where id = (select id from t where k = 'reply')) is not null, 'a reply keeps its quoted message');
+reset role;
+insert into public.conversations (id, kind, title, created_by) values ('00000000-0000-4000-8000-0000000000aa', 'group', 'Other', silo_test.uid('carol'));
+insert into public.messages (id, conversation_id, sender_id, body) values ('00000000-0000-4000-8000-0000000000bb', '00000000-0000-4000-8000-0000000000aa', silo_test.uid('carol'), 'secret elsewhere');
+select silo_test.login('bob');
+insert into t select 'reply2', (public.send_message((select id from t where k = 'ab'), 'sneaky', null, '00000000-0000-4000-8000-0000000000bb')).id;
+select silo_test.ok((select reply_to_id from public.messages where id = (select id from t where k = 'reply2')) is null, 'a reply cannot quote a message from another chat');
+select silo_test.login('carol');
+
 \echo '--- privacy setting: messages from everyone'
 update public.user_settings set allow_messages_from = 'everyone' where user_id = silo_test.uid('carol');
 select silo_test.login('alice');

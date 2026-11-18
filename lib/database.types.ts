@@ -26,7 +26,7 @@ export type ParticipantRow = {
 }
 export type MessageRow = {
 	id: string; conversation_id: string; sender_id: string | null; kind: 'text' | 'system' | 'call'; body: string;
-	client_id: string | null; meta: Json | null; created_at: string;
+	client_id: string | null; meta: Json | null; created_at: string; reply_to_id: string | null;
 }
 export type ReportRow = {
 	id: string; reporter_id: string | null; reported_id: string; conversation_id: string | null; message_id: string | null;
@@ -94,7 +94,7 @@ export type Database = {
 			set_member_role: Fn<{ p_conv: string; p_user: string; p_role: 'admin' | 'member' }, undefined>;
 			update_group: Fn<{ p_conv: string; p_title: string; p_photo_url: string | null }, undefined>;
 			leave_group: Fn<{ p_conv: string }, undefined>;
-			send_message: Fn<{ p_conv: string; p_body: string; p_client_id?: string | null }, MessageRow>;
+			send_message: Fn<{ p_conv: string; p_body: string; p_client_id?: string | null; p_reply_to?: string | null }, MessageRow>;
 			my_conversations: Fn<Record<PropertyKey, never>, ConversationListRow[]>;
 			search_people: Fn<{ p_query: string }, PersonSearchRow[]>;
 			start_call: Fn<{ p_conv: string }, { call_id: string; room_name: string; status: string; created: boolean; kind: 'direct' | 'group' }[]>;

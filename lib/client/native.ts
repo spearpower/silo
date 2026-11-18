@@ -9,6 +9,8 @@ export interface SiloAndroidBridge {
 	batteryUnrestricted(): boolean;
 	openBatterySettings(): void;
 	pushToken?(): string; // app 1.0.0+ with notifications
+	setSpeaker?(on: boolean): void; // app 1.0.1+
+	isSpeakerOn?(): boolean;
 }
 
 export function nativeApp(): SiloAndroidBridge | null {
@@ -63,4 +65,22 @@ export async function unregisterAppPush() {
 		if (t) { const { api } = await import('./api'); await api('/api/push', { removeFcm: t }); }
 	} catch { /* best effort */ }
 	registered = '';
+}
+
+// ---------------------------------------------------------------- loudspeaker (app 1.0.1+)
+
+/** True when the phone's audio route can be switched (only inside the Android app; browsers can't). */
+export const canSwitchSpeaker = () => typeof nativeApp()?.setSpeaker === 'function';
+
+export function nativeSpeakerOn(): boolean | null {
+	try { const v = nativeApp()?.isSpeakerOn?.(); return typeof v === 'boolean' ? v : null; } catch { return null; }
+}
+
+export function nativeSetSpeaker(on: boolean) {
+	try { nativeApp()?.setSpeaker?.(on); } catch { /* older app */ }
+}
+
+/** The app reports route changes (also from the notification's Speaker/Earpiece button). */
+export function onNativeSpeaker(fn: (on: boolean) => void) {
+	(window as unknown as { siloOnSpeaker?: (on: boolean) => void }).siloOnSpeaker = fn;
 }
