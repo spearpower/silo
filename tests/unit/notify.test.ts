@@ -33,4 +33,11 @@ describe('notification wording', () => {
 		expect(missed.tag).toBe(ring.tag); // the missed alert replaces the ringing one
 		expect(missed.body).toBe('Alice called you');
 	});
+
+	it('says "video call" for video calls', () => {
+		const ring = incomingCallNotification({ conversationId: conv, callId: 'c2', kind: 'direct', groupTitle: null, callerName: 'Alice', media: 'video' });
+		expect(ring.title).toBe('Alice is video calling');
+		expect(ring.media).toBe('video');
+		expect(missedCallNotification({ conversationId: conv, callId: 'c2', kind: 'direct', groupTitle: null, callerName: 'Alice', media: 'video' }).title).toBe('Missed video call');
+	});
 });

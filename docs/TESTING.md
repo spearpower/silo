@@ -88,6 +88,7 @@ Run this checklist after deploying, with **two accounts on two devices** (or two
 | 12 | Deny the microphone in the browser, then call | A clear explanation; no stuck call |
 | 13 | Settings → Notifications on (Android Chrome, or an iPhone with Silo added to the Home Screen) → Send test alert; then message that device while Silo is closed | A notification arrives; tapping it opens the chat; a call notification opens the ringing sheet |
 | 14 | Phone (390 px) and desktop (1280 px+) | Phone: bottom tabs, full-screen chat. Desktop: navigation rail, list and chat side by side |
+| 16 | A video call: answer with **Video** on one phone, **Audio** on the other; turn cameras on and off; flip the camera; group video with 3+ people | Both layouts work, tiles show who is speaking, "Video call · m:ss" appears in the chat |
 | 15 | Vercel production deploy | Build passes; `/api/cron/daily` returns 401 without the secret |
 
 **Network interruption:** in a call, turn Wi-Fi off for about 10 s and back on.

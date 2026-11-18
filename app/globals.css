@@ -473,3 +473,69 @@ h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
 .typing-bubble .dots span:nth-child(2) { animation-delay: .2s; }
 .typing-bubble .dots span:nth-child(3) { animation-delay: .4s; }
 .list-row .preview.typing { color: var(--accent-ink); font-weight: 600; font-style: italic; }
+
+/* ---------- video calls ---------- */
+.call-screen.video { padding: 0; justify-content: flex-start; background: #010A14; }
+.call-screen.video .vtop {
+	position: absolute; z-index: 3; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 10px;
+	padding: calc(10px + var(--safe-t)) 14px 22px; background: linear-gradient(rgba(1, 10, 20, .75), transparent); color: #fff;
+}
+.call-screen.video .vtop .state { color: #B9CDE0; font-size: 13.5px; }
+.call-screen.video .vtop .state.warn { color: #FFB4B5; }
+.minimize-btn { color: #fff; }
+.call-screen.video .vbottom {
+	position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; padding: 26px 12px calc(20px + var(--safe-b));
+	background: linear-gradient(transparent, rgba(1, 10, 20, .85));
+}
+.call-screen.video .call-controls { gap: 14px; flex-wrap: wrap; }
+.call-screen.video .call-ctl .disc { width: 56px; height: 56px; }
+.call-screen .call-controls { gap: 18px; flex-wrap: wrap; }
+.stage { position: absolute; inset: 0; display: grid; place-items: center; }
+.stage video.fill { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.stage-av { display: flex; flex-direction: column; align-items: center; gap: 12px; color: #B9CDE0; font-size: 14px; border-radius: 50%; }
+video.mirror { transform: scaleX(-1); }
+.pip {
+	position: absolute; z-index: 4; right: 14px; bottom: calc(150px + var(--safe-b)); width: 112px; height: 160px; border-radius: 16px; overflow: hidden;
+	background: #0A2D50; box-shadow: 0 8px 30px rgba(0, 0, 0, .5); border: 2px solid rgba(255, 255, 255, .25); touch-action: none; cursor: grab;
+}
+.pip video { width: 100%; height: 100%; object-fit: cover; }
+@media (min-width: 900px) { .pip { width: 220px; height: 150px; } }
+.vgrid {
+	position: absolute; inset: calc(64px + var(--safe-t)) 8px calc(118px + var(--safe-b)); display: grid; gap: 8px;
+	grid-template-columns: 1fr; grid-auto-rows: 1fr;
+}
+.vgrid.n3, .vgrid.n4, .vgrid.n5, .vgrid.n6, .vgrid.n7, .vgrid.n8 { grid-template-columns: 1fr 1fr; }
+@media (min-width: 900px) {
+	.vgrid.n2 { grid-template-columns: 1fr 1fr; }
+	.vgrid.n5, .vgrid.n6 { grid-template-columns: repeat(3, 1fr); }
+	.vgrid.n7, .vgrid.n8 { grid-template-columns: repeat(4, 1fr); }
+}
+.vtile { position: relative; min-height: 0; border-radius: 14px; overflow: hidden; background: #0A2D50; box-shadow: inset 0 0 0 2px transparent; transition: box-shadow .15s; }
+.vtile.speaking { box-shadow: inset 0 0 0 3px var(--stone); }
+.vtile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vtile-av { position: absolute; inset: 0; display: grid; place-items: center; }
+.vtile-name {
+	position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 16px);
+	padding: 3px 8px; border-radius: 999px; background: rgba(1, 10, 20, .6); color: #fff; font-size: 12.5px; font-weight: 600;
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vtile-name .icon { color: #FFB4B5; }
+.weak { margin-left: 4px; padding: 0 6px; border-radius: 6px; background: var(--scarlet); font-size: 11px; }
+.vtile.more { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #DCE7F1; gap: 2px; }
+.vtile.more b { font-size: 26px; }
+.weak-badge { padding: 4px 10px; border-radius: 999px; background: var(--scarlet-strong); color: #fff; font-size: 12px; font-weight: 700; }
+.call-tip {
+	position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(140px + var(--safe-b)); max-width: calc(100% - 32px);
+	padding: 8px 14px; border-radius: 12px; background: rgba(1, 10, 20, .85); color: #fff; font-size: 13.5px; font-weight: 600; text-align: center;
+}
+.call-screen:not(.video) .call-tip { position: static; transform: none; }
+.incoming .round { margin-left: -4px; }
+/* video controls: always one row (5 buttons fit 360 px phones) */
+.call-screen.video .call-controls { flex-wrap: nowrap; gap: 6px; justify-content: space-evenly; }
+.call-screen.video .call-ctl { min-width: 0; flex: 0 1 64px; font-size: 12px; gap: 6px; }
+.call-screen.video .call-ctl .disc { width: 50px; height: 50px; }
+.call-screen.video .call-ctl .disc .icon { width: 24px; height: 24px; }
+.call-screen.video .vbottom { padding-top: 20px; }
+.vgrid { bottom: calc(108px + var(--safe-b)); }
+.pip { bottom: calc(118px + var(--safe-b)); }
+.call-screen.video .call-tip { bottom: calc(118px + var(--safe-b)); }

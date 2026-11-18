@@ -227,6 +227,14 @@ select silo_test.ok((select status from public.call_sessions where id = (select 
 select silo_test.login('alice');
 select silo_test.fails('select * from public.expire_calls()', 'the call sweeper is server-only');
 
+-- video call: logged as a video call
+select silo_test.login('alice');
+insert into t select 'vcall', call_id from public.start_call((select id from t where k = 'ab'), 'video');
+select silo_test.ok((select media from public.call_sessions where id = (select id from t where k = 'vcall')) = 'video', 'a video call is recorded as video');
+select silo_test.fails('select * from public.start_call((select id from t where k = ''ab''), ''hologram'')', 'only audio or video calls');
+select public.leave_call((select id from t where k = 'vcall'));
+select silo_test.ok(exists (select 1 from public.messages where kind = 'call' and body = 'Missed video call'), 'the chat log says "Missed video call"');
+
 -- declined
 insert into t select 'call3', call_id from public.start_call((select id from t where k = 'ab'));
 select silo_test.login('bob');

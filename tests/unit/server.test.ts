@@ -42,7 +42,7 @@ describe('LiveKit tokens', () => {
 		process.env.LIVEKIT_API_KEY = 'APItest';
 		process.env.LIVEKIT_API_SECRET = 'secret-secret-secret-secret-secret-secret';
 	});
-	it('is short-lived, room-bound and microphone-only', async () => {
+	it('is short-lived, room-bound, microphone + camera only (no screen share, no data)', async () => {
 		const { url, token } = await callToken({ identity: 'user-1', name: 'Alice', room: 'silo-call-abc', media: 'audio' });
 		expect(url).toBe('wss://test.livekit.cloud');
 		const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
@@ -51,13 +51,14 @@ describe('LiveKit tokens', () => {
 		expect(claims.video.roomJoin).toBe(true);
 		expect(claims.video.roomAdmin).toBeFalsy();
 		expect(claims.video.canPublishData).toBe(false);
-		expect(claims.video.canPublishSources).toEqual(['microphone']);
+		expect(claims.video.canPublishSources).toEqual(['microphone', 'camera']);
 		expect(claims.exp - claims.nbf).toBeLessThanOrEqual(600);
 		expect(TOKEN_TTL).toBe('10m');
 	});
-	it('stays audio-only even if a video call is requested (video is a later release)', async () => {
+	it('never allows screen sharing (a later release)', async () => {
 		const { token } = await callToken({ identity: 'u', name: 'n', room: 'r', media: 'video' });
 		const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-		expect(claims.video.canPublishSources).toEqual(['microphone']);
+		expect(claims.video.canPublishSources).not.toContain('screen_share');
+		expect(claims.video.canPublishSources).not.toContain('screen_share_audio');
 	});
 });

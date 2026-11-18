@@ -96,6 +96,7 @@ export default function InfoPage() {
 			<div className="actions-row">
 				<Link className="action-tile" href={`/c/${id}`}><Icon name="chats" />Message</Link>
 				<button className="action-tile" type="button" onClick={() => void startCall(id)} disabled={iBlocked}><Icon name="phone" />Call</button>
+				<button className="action-tile" type="button" onClick={() => void startCall(id, 'video')} disabled={iBlocked}><Icon name="video" />Video</button>
 				<button className="action-tile" type="button" onClick={() => void toggleMute()} disabled={busy} aria-pressed={muted}><Icon name={muted ? 'bell' : 'bellOff'} />{muted ? 'Unmute' : 'Mute'}</button>
 				{conv.kind === 'group' && isAdmin && (
 					<label className="action-tile" style={{ cursor: 'pointer' }}>

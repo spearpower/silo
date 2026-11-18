@@ -144,12 +144,17 @@ All keys are UUIDs tied to `auth.users`, and all times are `timestamptz`.
    - reconnecting state
    - microphone permission errors explained in plain language
    - autoplay unlock on tap
-6. **Video later:**
-   - add `TrackSource.CAMERA` to the grant when `media = 'video'`
-   - add a camera toggle in the call screen
-   - allow `camera=(self)` in `Permissions-Policy`
-
-   The tables, state machine and token endpoint stay as they are.
+6. **Video (added 2026-11-19):**
+   - `start_call(p_conv, p_media)` records whether a call started as `audio` or `video` (migration 8). Ringing screens, notifications and the chat log ("Video call · 2:05", "Missed video call") use it.
+   - Tokens allow microphone **and** camera in every call, so any call can switch video on and off. Screen sharing and data channels stay off.
+   - Answering a video call offers **Audio** or **Video**. Joining a running group call starts with the camera off.
+   - Layouts: one-to-one shows the other person full screen and your own camera in a draggable window. Groups get a grid of up to 8 tiles (video first, then whoever is speaking) plus a "+N more" tile.
+   - **Data saving** (LiveKit free plan, mobile data):
+     - capture is capped at 540p, 24 fps, about 0.8 Mb/s
+     - simulcast at 180p, 360p and 540p, so each viewer gets only their tile's size (`adaptiveStream`)
+     - layers nobody watches stop (`dynacast`)
+     - if your own connection stays poor for 8 s, your camera pauses and the voice continues
+   - Android app 1.0.2 asks for the camera permission. When the phone locks, Android blocks the camera for every app, so video pauses while voice continues.
 
 ## 7. Push notifications
 

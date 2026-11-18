@@ -97,7 +97,7 @@ export type Database = {
 			send_message: Fn<{ p_conv: string; p_body: string; p_client_id?: string | null; p_reply_to?: string | null }, MessageRow>;
 			my_conversations: Fn<Record<PropertyKey, never>, ConversationListRow[]>;
 			search_people: Fn<{ p_query: string }, PersonSearchRow[]>;
-			start_call: Fn<{ p_conv: string }, { call_id: string; room_name: string; status: string; created: boolean; kind: 'direct' | 'group' }[]>;
+			start_call: Fn<{ p_conv: string; p_media?: 'audio' | 'video' }, { call_id: string; room_name: string; status: string; created: boolean; kind: 'direct' | 'group'; media: 'audio' | 'video' }[]>;
 			join_call: Fn<{ p_call: string }, { call_id: string; room_name: string; status: string; kind: 'direct' | 'group' }[]>;
 			decline_call: Fn<{ p_call: string }, undefined>;
 			leave_call: Fn<{ p_call: string }, MissedRow[]>;

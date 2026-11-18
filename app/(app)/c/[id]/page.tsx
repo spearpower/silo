@@ -51,10 +51,11 @@ export default function ConversationPage() {
 	useEffect(() => {
 		const callId = search.get('call');
 		if (!callId || !s.meId) return;
-		const answer = search.get('answer') === '1', decline = search.get('decline') === '1';
+		const answerParam = search.get('answer');
+		const answer = answerParam === '1' || answerParam === 'video', decline = search.get('decline') === '1';
 		if (answer || decline) router.replace(`/c/${id}`); // don't repeat it on reload
 		if (decline) { void api(`/api/calls/${callId}/decline`, {}).catch(() => {}); return; }
-		void presentIncoming(callId).then(() => { if (answer) void acceptCall(); });
+		void presentIncoming(callId).then(() => { if (answer) void acceptCall(answerParam === 'video'); });
 	}, [search, s.meId, id, router]);
 
 	const conv = s.conv;
@@ -234,6 +235,10 @@ export default function ConversationPage() {
 						<span className={`status ellipsis${live ? ' live' : ''}`} style={{ display: 'block' }} aria-live="polite">{status || ' '}</span>
 					</span>
 				</Link>
+				<button className="icon-btn call-btn" type="button" aria-label={conv?.kind === 'group' ? 'Start a group video call' : 'Video call'} title="Video call"
+					disabled={!conv || iBlocked || inThisCall} onClick={() => void (showJoin && liveCall ? joinGroupCall(liveCall.id, id) : startCall(id, 'video'))}>
+					<Icon name="video" />
+				</button>
 				<button className="icon-btn call-btn" type="button" aria-label={conv?.kind === 'group' ? 'Start a group voice call' : 'Voice call'} title="Voice call"
 					disabled={!conv || iBlocked || inThisCall} onClick={() => void (showJoin && liveCall ? joinGroupCall(liveCall.id, id) : startCall(id))}>
 					<Icon name="phone" />

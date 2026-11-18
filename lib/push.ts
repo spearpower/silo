@@ -43,7 +43,7 @@ async function sendApp(userIds: string[], payload: PushPayload, ttl: number): Pr
 	const admin = adminSupabase();
 	const { data: devices, error } = await admin.from('device_tokens').select('id, token').in('user_id', userIds);
 	if (error) { console.error('[push] device tokens', error.message); return 0; }
-	const data: Record<string, string> = { kind: payload.kind, title: payload.title, body: payload.body, url: payload.url, tag: payload.tag, ...(payload.callId ? { callId: payload.callId } : {}) };
+	const data: Record<string, string> = { kind: payload.kind, title: payload.title, body: payload.body, url: payload.url, tag: payload.tag, ...(payload.callId ? { callId: payload.callId } : {}), ...(payload.media ? { media: payload.media } : {}) };
 	let sent = 0;
 	await Promise.all((devices || []).map(async d => {
 		const r = await sendFcm(d.token, data, ttl);
@@ -107,7 +107,7 @@ export async function alertMessage(msg: MessageRow): Promise<void> {
 
 async function callContext(callId: string) {
 	const admin = adminSupabase();
-	const { data: call } = await admin.from('call_sessions').select('id, conversation_id, kind, started_by').eq('id', callId).single();
+	const { data: call } = await admin.from('call_sessions').select('id, conversation_id, kind, started_by, media').eq('id', callId).single();
 	if (!call) return null;
 	const [{ data: conv }, { data: caller }] = await Promise.all([
 		admin.from('conversations').select('title').eq('id', call.conversation_id).single(),
@@ -124,7 +124,7 @@ export async function alertIncomingCall(callId: string, callerId: string): Promi
 		if (!ctx) return;
 		const { data: invited } = await adminSupabase().from('call_participants').select('user_id').eq('call_id', callId).eq('state', 'invited');
 		const ids = (invited || []).map(r => r.user_id).filter(id => id !== callerId);
-		await sendTo(ids, incomingCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName }), { ttl: 45, urgency: 'high' });
+		await sendTo(ids, incomingCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName, media: ctx.call.media }), { ttl: 45, urgency: 'high' });
 	} catch (e) { console.error('[push] call', (e as Error).message); }
 }
 
@@ -136,7 +136,7 @@ export async function alertMissed(rows: MissedRow[]): Promise<void> {
 		try {
 			const ctx = await callContext(callId);
 			if (!ctx) return;
-			await sendTo(ids, missedCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName }), { ttl: 86400 });
+			await sendTo(ids, missedCallNotification({ conversationId: ctx.call.conversation_id, callId, kind: ctx.call.kind, groupTitle: ctx.groupTitle, callerName: ctx.callerName, media: ctx.call.media }), { ttl: 86400 });
 		} catch (e) { console.error('[push] missed', (e as Error).message); }
 	}));
 }

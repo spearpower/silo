@@ -1,7 +1,7 @@
 import 'server-only';
 // LiveKit access tokens. Issued only by our server, only after the database confirmed (call_access) that the
-// person is joined to a live call in a conversation they belong to. Tokens are short-lived and audio-only;
-// the room name is never treated as a credential.
+// person is joined to a live call in a conversation they belong to. Tokens are short-lived, allow the microphone
+// and camera (any call can switch video on/off), never screen sharing or data; the room name is never a credential.
 import { AccessToken, TrackSource } from 'livekit-server-sdk';
 
 export const livekitConfigured = () => !!(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
@@ -12,10 +12,10 @@ export async function callToken(o: { identity: string; name: string; room: strin
 	const at = new AccessToken(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!, {
 		identity: o.identity, name: o.name, ttl: TOKEN_TTL,
 	});
-	// Video is a later release: the 'video' media value is reserved, but tokens only allow the microphone for now.
+	// Camera is allowed in every call (a voice call can turn video on). Screen sharing is a later release.
 	at.addGrant({
 		room: o.room, roomJoin: true, canSubscribe: true, canPublish: true, canPublishData: false,
-		canPublishSources: [TrackSource.MICROPHONE],
+		canPublishSources: [TrackSource.MICROPHONE, TrackSource.CAMERA],
 	});
 	return { url: process.env.LIVEKIT_URL!, token: await at.toJwt() };
 }
